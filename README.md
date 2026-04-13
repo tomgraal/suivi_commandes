@@ -67,12 +67,13 @@ Une application Web de suivi des commandes pour le processus interne du GHT ADS.
 
 ## Comptes de démonstration
 
-Au premier démarrage, l’application génère deux comptes de démonstration :
+Au premier démarrage, l’application génère trois comptes de démonstration :
 
 - `engineer` / `password` (ingénieur)
 - `buyer` / `password` (acheteur)
+- `supplier` / `password` (fournisseur)
 
-Les fournisseurs peuvent s’inscrire via la page d’inscription.
+Les fournisseurs peuvent aussi s’inscrire via la page d’inscription.
 
 ## Configuration des emails
 

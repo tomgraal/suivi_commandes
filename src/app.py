@@ -228,9 +228,15 @@ def seed_users():
         db.session.add(buyer)
         created = True
 
+    if not User.query.filter_by(username='supplier').first():
+        supplier = User(username='supplier', email='supplier@example.com', role='supplier', verified=True)
+        supplier.set_password('password')
+        db.session.add(supplier)
+        created = True
+
     if created:
         db.session.commit()
-        app.logger.info('Created demo users: engineer/password and buyer/password')
+        app.logger.info('Created demo users: engineer/password, buyer/password and supplier/password')
 
 
 def send_email(recipient: str, subject: str, body: str):

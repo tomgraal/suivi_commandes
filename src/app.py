@@ -96,11 +96,7 @@ class User(UserMixin, db.Model):
         return False
 
     def can_sign(self, document) -> bool:
-        if document.type == 'quote':
-            return self.role == 'engineer' and self.email.lower() == document.case.supplier_email.lower()
-        if document.type in {'purchase_order', 'reception'}:
-            return self.role == 'engineer' and self.email.lower() == document.case.supplier_email.lower()
-        return False
+        return self.role == 'engineer' and self.id == document.case.engineer_id
 
 
 class Case(db.Model):
@@ -218,16 +214,23 @@ def ensure_directories():
 
 
 def seed_users():
-    if User.query.count() > 0:
-        return
+    created = False
 
-    engineer = User(username='engineer', email='engineer@example.com', role='engineer', verified=True)
-    engineer.set_password('password')
-    buyer = User(username='buyer', email='buyer@example.com', role='buyer', verified=True)
-    buyer.set_password('password')
-    db.session.add_all([engineer, buyer])
-    db.session.commit()
-    app.logger.info('Created demo users: engineer/password and buyer/password')
+    if not User.query.filter_by(username='engineer').first():
+        engineer = User(username='engineer', email='engineer@example.com', role='engineer', verified=True)
+        engineer.set_password('password')
+        db.session.add(engineer)
+        created = True
+
+    if not User.query.filter_by(username='buyer').first():
+        buyer = User(username='buyer', email='buyer@example.com', role='buyer', verified=True)
+        buyer.set_password('password')
+        db.session.add(buyer)
+        created = True
+
+    if created:
+        db.session.commit()
+        app.logger.info('Created demo users: engineer/password and buyer/password')
 
 
 def send_email(recipient: str, subject: str, body: str):
@@ -494,7 +497,7 @@ def document_file(filename):
 def sign_document(document_id):
     document = Document.query.get_or_404(document_id)
     case = document.case
-    if current_user.role != 'engineer' or current_user.email.lower() != case.supplier_email.lower():
+    if current_user.role != 'engineer' or current_user.id != case.engineer_id:
         flash('Vous ne pouvez pas signer ce document.', 'warning')
         return redirect(url_for('case_detail', case_id=case.id))
 

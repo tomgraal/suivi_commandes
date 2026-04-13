@@ -12,15 +12,13 @@
         <li>
             <strong>{{ label }} :</strong>
             {% if document %}
-                <a href="{{ url_for('document_file', filename=document.filename) }}">Télécharger</a>
+                <a href="{{ url_for('document_file', filename=document.filename) }}" target="_blank" rel="noopener">Voir / Télécharger</a>
                 {% if document.is_signed %}
                     <span class="badge signed">Signé</span>
                 {% else %}
                     <span class="badge pending">En attente de signature</span>
                 {% endif %}
-                {% if current_user.is_authenticated and current_user.role == 'engineer' and document.type == 'quote' and current_user.email.lower() == case.supplier_email.lower() and not document.is_signed %}
-                    <a class="button small" href="{{ url_for('sign_document', document_id=document.id) }}">Signer</a>
-                {% elif current_user.is_authenticated and current_user.role == 'engineer' and document.type in ['purchase_order', 'reception'] and current_user.email.lower() == case.supplier_email.lower() and not document.is_signed %}
+                {% if current_user.is_authenticated and current_user.role == 'engineer' and current_user.id == case.engineer_id and not document.is_signed %}
                     <a class="button small" href="{{ url_for('sign_document', document_id=document.id) }}">Signer</a>
                 {% endif %}
             {% else %}

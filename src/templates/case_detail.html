@@ -30,6 +30,22 @@
     {% endfor %}
 </ul>
 
+{% if current_user.role == 'engineer' %}
+    <h2>Signature de l’ingénieur</h2>
+    {% if current_user.signature %}
+        <p><strong>{{ current_user.signature.first_name }} {{ current_user.signature.last_name }}</strong></p>
+        <p>{{ current_user.signature.function_title }}</p>
+        <p>Date de mise à jour : {{ current_user.signature.updated_at.strftime('%d/%m/%Y %H:%M') }}</p>
+        {% if current_user.signature.stamp_filename %}
+            <div class="stamp-preview">
+                <img src="{{ url_for('document_file', filename=current_user.signature.stamp_filename) }}" alt="Tampon du centre hospitalier">
+            </div>
+        {% endif %}
+    {% else %}
+        <p>Aucune signature enregistrée. <a href="{{ url_for('signature_settings') }}">Créer ma signature</a></p>
+    {% endif %}
+{% endif %}
+
 <h2>Actions</h2>
 <ul>
     {% if current_user.role == 'supplier' and not quote %}

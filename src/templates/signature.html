@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Paramètres de signature</h1>
+<form method="post" enctype="multipart/form-data">
+    {{ form.hidden_tag() }}
+    <div class="form-field">
+        {{ form.first_name.label }}
+        {{ form.first_name() }}
+    </div>
+    <div class="form-field">
+        {{ form.last_name.label }}
+        {{ form.last_name() }}
+    </div>
+    <div class="form-field">
+        {{ form.function_title.label }}
+        {{ form.function_title() }}
+    </div>
+    <div class="form-field">
+        <label for="stamp_image">Tampon du centre hospitalier</label>
+        <input type="file" id="stamp_image" name="stamp_image" accept="image/png, image/jpeg">
+    </div>
+    {% if signature and signature.stamp_filename %}
+        <div class="form-field">
+            <p>Tampon actuel :</p>
+            <img class="stamp-preview" src="{{ url_for('document_file', filename=signature.stamp_filename) }}" alt="Tampon du centre hospitalier">
+        </div>
+    {% endif %}
+    <div class="form-actions">
+        {{ form.submit(class_='button') }}
+        <a class="button secondary" href="{{ url_for('dashboard') }}">Retour</a>
+    </div>
+</form>
+{% endblock %}

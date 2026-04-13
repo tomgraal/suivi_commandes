@@ -2,7 +2,10 @@
 {% block content %}
 <h1>Tableau de bord</h1>
 {% if current_user.role == 'engineer' %}
-    <p><a class="button" href="{{ url_for('create_case') }}">Créer une nouvelle affaire</a></p>
+    <p>
+        <a class="button" href="{{ url_for('create_case') }}">Créer une nouvelle affaire</a>
+        <a class="button secondary" href="{{ url_for('signature_settings') }}">Paramètres de signature</a>
+    </p>
 {% endif %}
 <table>
     <thead>

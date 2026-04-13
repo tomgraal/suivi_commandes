@@ -140,3 +140,13 @@ table td {
     background: #e76f51;
     color: white;
 }
+
+.stamp-preview {
+    max-width: 260px;
+    max-height: 160px;
+    border: 1px solid #cfd8dc;
+    border-radius: 4px;
+    display: block;
+    margin-top: 10px;
+}
+

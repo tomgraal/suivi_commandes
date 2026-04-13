@@ -48,6 +48,7 @@ login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
 ALLOWED_EXTENSIONS = {'pdf'}
+ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 CASE_TYPES = [
     ('fournitures_informatiques', 'Fournitures informatiques'),
     ('fournitures_telephoniques', 'Fournitures téléphoniques'),
@@ -80,6 +81,7 @@ class User(UserMixin, db.Model):
     cases_created = db.relationship('Case', backref='engineer', foreign_keys='Case.engineer_id')
     documents_uploaded = db.relationship('Document', backref='uploader', foreign_keys='Document.uploaded_by_id')
     documents_signed = db.relationship('Document', backref='signer', foreign_keys='Document.signer_id')
+    signature = db.relationship('Signature', back_populates='user', uselist=False)
 
     def set_password(self, password: str):
         self.password_hash = generate_password_hash(password)
@@ -162,6 +164,17 @@ class VerificationToken(db.Model):
     user = db.relationship('User', backref=db.backref('verification_token', uselist=False))
 
 
+class Signature(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), unique=True, nullable=False)
+    first_name = db.Column(db.String(80), nullable=False)
+    last_name = db.Column(db.String(80), nullable=False)
+    function_title = db.Column(db.String(120), nullable=False)
+    stamp_filename = db.Column(db.String(250), nullable=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user = db.relationship('User', back_populates='signature')
+
+
 class LoginForm(FlaskForm):
     username = StringField('Nom d’utilisateur', validators=[DataRequired(), Length(min=3, max=80)])
     password = PasswordField('Mot de passe', validators=[DataRequired()])
@@ -201,6 +214,13 @@ class UploadForm(FlaskForm):
     submit = SubmitField('Téléverser le fichier PDF')
 
 
+class SignatureForm(FlaskForm):
+    first_name = StringField('Prénom', validators=[DataRequired(), Length(max=80)])
+    last_name = StringField('Nom', validators=[DataRequired(), Length(max=80)])
+    function_title = StringField('Fonction', validators=[DataRequired(), Length(max=120)])
+    submit = SubmitField('Enregistrer la signature')
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -208,6 +228,10 @@ def load_user(user_id):
 
 def allowed_file(filename: str) -> bool:
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def allowed_image(filename: str) -> bool:
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
 
 
 def ensure_directories():
@@ -308,6 +332,41 @@ def dashboard():
     else:
         cases = Case.query.order_by(Case.created_at.desc()).all()
     return render_template('dashboard.html', cases=cases)
+
+
+@app.route('/signature', methods=['GET', 'POST'])
+@login_required
+def signature_settings():
+    if current_user.role != 'engineer':
+        flash('Accès refusé.', 'warning')
+        return redirect(url_for('dashboard'))
+
+    signature = current_user.signature or Signature(user_id=current_user.id)
+    form = SignatureForm(obj=signature)
+
+    if form.validate_on_submit():
+        signature.first_name = form.first_name.data
+        signature.last_name = form.last_name.data
+        signature.function_title = form.function_title.data
+        signature.updated_at = datetime.utcnow()
+
+        file = request.files.get('stamp_image')
+        if file and file.filename:
+            if not allowed_image(file.filename):
+                flash('Seuls les fichiers PNG, JPG et JPEG sont autorisés pour le tampon.', 'danger')
+                return redirect(request.url)
+            filename = secure_filename(file.filename)
+            unique_name = f'signature_{current_user.id}_{uuid.uuid4().hex}_{filename}'
+            file_path = UPLOAD_FOLDER / unique_name
+            file.save(file_path)
+            signature.stamp_filename = unique_name
+
+        db.session.add(signature)
+        db.session.commit()
+        flash('Signature enregistrée.', 'success')
+        return redirect(url_for('dashboard'))
+
+    return render_template('signature.html', form=form, signature=signature)
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -519,6 +578,10 @@ def sign_document(document_id):
     if current_user.role != 'engineer' or current_user.id != case.engineer_id:
         flash('Vous ne pouvez pas signer ce document.', 'warning')
         return redirect(url_for('case_detail', case_id=case.id))
+
+    if not current_user.signature:
+        flash('Définissez d’abord votre signature avant de signer.', 'warning')
+        return redirect(url_for('signature_settings'))
 
     document.is_signed = True
     document.signed_at = datetime.utcnow()

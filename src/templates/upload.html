@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Déposer {{ doc_label }}</h1>
+<p>Affaire : {{ case.title }}</p>
+<form method="post" enctype="multipart/form-data">
+    <div class="form-field">
+        <label for="file">Fichier PDF</label>
+        <input type="file" id="file" name="file" accept="application/pdf" required>
+    </div>
+    <div class="form-actions">
+        <button class="button" type="submit">Téléverser</button>
+        <a class="button secondary" href="{{ url_for('case_detail', case_id=case.id) }}">Retour</a>
+    </div>
+</form>
+{% endblock %}

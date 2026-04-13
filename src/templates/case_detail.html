@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Affaire : {{ case.title }}</h1>
+<p><strong>Type :</strong> {{ case.type }}</p>
+<p><strong>Fournisseur :</strong> {{ case.supplier_email }}</p>
+<p><strong>Description :</strong> {{ case.description or 'N/A' }}</p>
+
+<h2>Documents</h2>
+<ul>
+    {% for doc_key, label in doc_types.items() %}
+        {% set document = case.get_document(doc_key) %}
+        <li>
+            <strong>{{ label }} :</strong>
+            {% if document %}
+                <a href="{{ url_for('document_file', filename=document.filename) }}">Télécharger</a>
+                {% if document.is_signed %}
+                    <span class="badge signed">Signé</span>
+                {% else %}
+                    <span class="badge pending">En attente de signature</span>
+                {% endif %}
+                {% if current_user.is_authenticated and current_user.role == 'engineer' and document.type == 'quote' and current_user.email.lower() == case.supplier_email.lower() and not document.is_signed %}
+                    <a class="button small" href="{{ url_for('sign_document', document_id=document.id) }}">Signer</a>
+                {% elif current_user.is_authenticated and current_user.role == 'engineer' and document.type in ['purchase_order', 'reception'] and current_user.email.lower() == case.supplier_email.lower() and not document.is_signed %}
+                    <a class="button small" href="{{ url_for('sign_document', document_id=document.id) }}">Signer</a>
+                {% endif %}
+            {% else %}
+                Aucun document.
+            {% endif %}
+        </li>
+    {% endfor %}
+</ul>
+
+<h2>Actions</h2>
+<ul>
+    {% if current_user.role == 'supplier' and not quote %}
+        <li><a class="button" href="{{ url_for('upload_document', case_id=case.id, doc_type='quote') }}">Déposer un devis PDF</a></li>
+    {% endif %}
+    {% if current_user.role == 'buyer' and case.has_signed_quote() and not purchase_order %}
+        <li><a class="button" href="{{ url_for('upload_document', case_id=case.id, doc_type='purchase_order') }}">Déposer le bon de commande</a></li>
+    {% endif %}
+    {% if current_user.role == 'buyer' and purchase_order and not reception %}
+        <li><a class="button" href="{{ url_for('upload_document', case_id=case.id, doc_type='reception') }}">Déposer le bon de réception</a></li>
+    {% endif %}
+</ul>
+{% endblock %}

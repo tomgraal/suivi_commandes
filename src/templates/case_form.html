@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Créer une nouvelle affaire</h1>
+<form method="post">
+    {{ form.hidden_tag() }}
+    <div class="form-field"> {{ form.title.label }} {{ form.title() }} </div>
+    <div class="form-field"> {{ form.description.label }} {{ form.description(rows=4) }} </div>
+    <div class="form-field"> {{ form.type.label }} {{ form.type() }} </div>
+    <div class="form-field"> {{ form.object_contract.label }} {{ form.object_contract() }} </div>
+    <div class="form-field"> {{ form.start_date.label }} {{ form.start_date() }} </div>
+    <div class="form-field"> {{ form.duration.label }} {{ form.duration() }} </div>
+    <div class="form-field"> {{ form.market.label }} {{ form.market() }} </div>
+    <div class="form-field"> {{ form.budget.label }} {{ form.budget() }} </div>
+    <div class="form-field"> {{ form.uf_number.label }} {{ form.uf_number() }} </div>
+    <div class="form-field"> {{ form.supplier_email.label }} {{ form.supplier_email() }} </div>
+    <div class="form-field"> {{ form.provider_designation.label }} {{ form.provider_designation() }} </div>
+    <div class="form-field"> {{ form.supplier_contact.label }} {{ form.supplier_contact() }} </div>
+    <div class="form-field"> {{ form.billing_terms.label }} {{ form.billing_terms() }} </div>
+    <div class="form-field"> {{ form.invoice_on_delivery.label }} {{ form.invoice_on_delivery() }} </div>
+    <div class="form-field"> {{ form.invoice_on_order.label }} {{ form.invoice_on_order() }} </div>
+    <div class="form-field"> {{ form.account_number.label }} {{ form.account_number() }} </div>
+    <div class="form-actions"> {{ form.submit(class_='button') }} </div>
+</form>
+{% endblock %}

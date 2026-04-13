@@ -81,13 +81,15 @@ Ajoutez un fichier `.env` avec les variables suivantes si vous souhaitez envoyer
 
 ```env
 SECRET_KEY=change_me
-MAIL_SERVER=smtp.example.com
+MAIL_SERVER=smtp.gmail.com
 MAIL_PORT=587
 MAIL_USE_TLS=true
-MAIL_USERNAME=...
-MAIL_PASSWORD=...
-MAIL_DEFAULT_SENDER=noreply@example.com
+MAIL_USERNAME=vincentfluchere@gmail.com
+MAIL_PASSWORD=P@ngounier6112
+MAIL_DEFAULT_SENDER=vincentfluchere@gmail.com
 ```
+
+Pour Gmail, utilisez un mot de passe d’application (App Password) avec la validation en deux étapes activée sur votre compte.
 
 Sans configuration SMTP, les notifications sont enregistrées dans les logs de l’application.
 

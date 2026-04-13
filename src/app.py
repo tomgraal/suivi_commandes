@@ -6,6 +6,7 @@ from pathlib import Path
 from email.message import EmailMessage
 import smtplib
 
+from dotenv import load_dotenv
 from flask import (
     Flask,
     flash,
@@ -24,6 +25,7 @@ from wtforms import DateField, PasswordField, SelectField, StringField, TextArea
 from wtforms.validators import DataRequired, Email, EqualTo, Length
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / '.env')
 UPLOAD_FOLDER = Path(os.environ.get('UPLOAD_FOLDER', BASE_DIR / 'uploads'))
 DATABASE_PATH = Path(os.environ.get('DATABASE_PATH', BASE_DIR / 'data' / 'app.db'))
 

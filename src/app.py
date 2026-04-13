@@ -23,6 +23,9 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 from wtforms import DateField, PasswordField, SelectField, StringField, TextAreaField, SubmitField
 from wtforms.validators import DataRequired, Email, EqualTo, Length
+from pypdf import PdfReader, PdfWriter
+from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / '.env')
@@ -232,6 +235,66 @@ def allowed_file(filename: str) -> bool:
 
 def allowed_image(filename: str) -> bool:
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
+
+
+def create_signature_overlay(original_pdf_path: Path, signature, stamp_path: Path | None) -> Path:
+    reader = PdfReader(str(original_pdf_path))
+    first_page = reader.pages[0]
+    width = float(first_page.mediabox.width)
+    height = float(first_page.mediabox.height)
+    overlay_path = UPLOAD_FOLDER / f'overlay_{uuid.uuid4().hex}.pdf'
+
+    c = canvas.Canvas(str(overlay_path), pagesize=(width, height))
+    margin = 40
+    image_x = width - margin
+    image_y = margin
+    image_width = 0
+    image_height = 0
+
+    if stamp_path and stamp_path.exists():
+        try:
+            image = ImageReader(str(stamp_path))
+            iw, ih = image.getSize()
+            max_w = 160
+            max_h = 160
+            ratio = min(max_w / iw, max_h / ih, 1)
+            image_width = iw * ratio
+            image_height = ih * ratio
+            image_x = width - image_width - margin
+            c.drawImage(image, image_x, image_y, width=image_width, height=image_height, mask='auto')
+        except Exception:
+            image_width = 0
+            image_height = 0
+
+    text_x = width - margin
+    text_y = image_y + image_height + 12
+    c.setFont('Helvetica-Bold', 12)
+    c.drawRightString(text_x, text_y, f'{signature.first_name} {signature.last_name}')
+    c.setFont('Helvetica', 11)
+    c.drawRightString(text_x, text_y - 16, signature.function_title)
+    c.drawRightString(text_x, text_y - 32, f'Date : {datetime.utcnow().strftime("%d/%m/%Y %H:%M")}')
+
+    c.save()
+    return overlay_path
+
+
+def merge_signature_to_pdf(original_pdf_path: Path, overlay_pdf_path: Path, output_pdf_path: Path) -> None:
+    reader = PdfReader(str(original_pdf_path))
+    overlay = PdfReader(str(overlay_pdf_path))
+    overlay_page = overlay.pages[0]
+    writer = PdfWriter()
+
+    for page in reader.pages:
+        page.merge_page(overlay_page)
+        writer.add_page(page)
+
+    with open(output_pdf_path, 'wb') as output_file:
+        writer.write(output_file)
+
+    try:
+        overlay_pdf_path.unlink()
+    except OSError:
+        pass
 
 
 def ensure_directories():
@@ -579,10 +642,34 @@ def sign_document(document_id):
         flash('Vous ne pouvez pas signer ce document.', 'warning')
         return redirect(url_for('case_detail', case_id=case.id))
 
+    if document.is_signed:
+        flash('Ce document est déjà signé.', 'warning')
+        return redirect(url_for('case_detail', case_id=case.id))
+
     if not current_user.signature:
         flash('Définissez d’abord votre signature avant de signer.', 'warning')
         return redirect(url_for('signature_settings'))
 
+    original_path = UPLOAD_FOLDER / document.filename
+    if not original_path.exists():
+        flash('Le fichier PDF est introuvable.', 'danger')
+        return redirect(url_for('case_detail', case_id=case.id))
+
+    overlay_path = create_signature_overlay(
+        original_path,
+        current_user.signature,
+        UPLOAD_FOLDER / current_user.signature.stamp_filename if current_user.signature.stamp_filename else None,
+    )
+    signed_filename = f'{case.id}_{document.type}_signed_{uuid.uuid4().hex}.pdf'
+    signed_path = UPLOAD_FOLDER / signed_filename
+
+    try:
+        merge_signature_to_pdf(original_path, overlay_path, signed_path)
+    except Exception as exc:
+        flash('Impossible de signer le PDF : %s' % exc, 'danger')
+        return redirect(url_for('case_detail', case_id=case.id))
+
+    document.filename = signed_filename
     document.is_signed = True
     document.signed_at = datetime.utcnow()
     document.signer_id = current_user.id
@@ -604,6 +691,31 @@ def sign_document(document_id):
 
     flash('Document signé.', 'success')
     return redirect(url_for('case_detail', case_id=case.id))
+
+
+@app.route('/documents/<int:document_id>/delete', methods=['POST'])
+@login_required
+def delete_document(document_id):
+    document = Document.query.get_or_404(document_id)
+    if document.is_signed:
+        flash('Impossible de supprimer un document déjà signé.', 'warning')
+        return redirect(url_for('case_detail', case_id=document.case.id))
+
+    if current_user.id != document.uploaded_by_id and current_user.role != 'engineer':
+        flash('Vous ne pouvez pas supprimer ce document.', 'warning')
+        return redirect(url_for('case_detail', case_id=document.case.id))
+
+    file_path = UPLOAD_FOLDER / document.filename
+    try:
+        if file_path.exists():
+            file_path.unlink()
+    except OSError:
+        pass
+
+    db.session.delete(document)
+    db.session.commit()
+    flash('Document supprimé.', 'success')
+    return redirect(url_for('case_detail', case_id=document.case.id))
 
 
 if __name__ == '__main__':

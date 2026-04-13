@@ -23,6 +23,11 @@
                 {% if current_user.is_authenticated and current_user.role == 'engineer' and current_user.id == case.engineer_id and not document.is_signed %}
                     <a class="button small" href="{{ url_for('sign_document', document_id=document.id) }}">Signer</a>
                 {% endif %}
+                {% if not document.is_signed and (current_user.role == 'engineer' or current_user.id == document.uploaded_by_id) %}
+                    <form method="post" action="{{ url_for('delete_document', document_id=document.id) }}" style="display:inline;">
+                        <button type="submit" class="button small danger" onclick="return confirm('Supprimer ce document ? Cela ne peut pas être annulé.')">Supprimer</button>
+                    </form>
+                {% endif %}
             {% else %}
                 Aucun document.
             {% endif %}

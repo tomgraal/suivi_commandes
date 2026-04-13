@@ -12,7 +12,9 @@
         <li>
             <strong>{{ label }} :</strong>
             {% if document %}
-                <a href="{{ url_for('document_file', filename=document.filename) }}" target="_blank" rel="noopener">Voir / Télécharger</a>
+                <a href="{{ url_for('view_document', document_id=document.id) }}" target="_blank" rel="noopener">Voir</a>
+                |
+                <a href="{{ url_for('document_file', filename=document.filename) }}">Télécharger</a>
                 {% if document.is_signed %}
                     <span class="badge signed">Signé</span>
                 {% else %}

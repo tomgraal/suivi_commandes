@@ -473,13 +473,17 @@ def upload_document(case_id, doc_type):
 
         subject = f'{DOCUMENT_TYPES[doc_type]} déposé pour l’affaire {case.title}'
         if current_user.role == 'supplier':
-            recipient = case.engineer.email
+            recipients = [case.engineer.email]
             body = f'Le devis a été déposé par le fournisseur pour l’affaire {case.title}. Connectez-vous pour signer.'
+        elif current_user.role == 'buyer':
+            recipients = [case.engineer.email, case.supplier_email]
+            body = f'Le {DOCUMENT_TYPES[doc_type].lower()} a été déposé pour l’affaire {case.title}. Connectez-vous pour le consulter.'
         else:
-            recipient = case.engineer.email
-            body = f'Le bon de commande a été déposé pour l’affaire {case.title}. Connectez-vous pour signer.'
+            recipients = [case.engineer.email]
+            body = f'Le {DOCUMENT_TYPES[doc_type].lower()} a été déposé pour l’affaire {case.title}.'
 
-        send_email(recipient, subject, body)
+        for recipient in set(recipients):
+            send_email(recipient, subject, body)
         flash('Document téléchargé.', 'success')
         return redirect(url_for('case_detail', case_id=case.id))
 
@@ -489,7 +493,14 @@ def upload_document(case_id, doc_type):
 @app.route('/documents/<path:filename>')
 @login_required
 def document_file(filename):
-    return send_from_directory(UPLOAD_FOLDER, filename)
+    return send_from_directory(UPLOAD_FOLDER, filename, as_attachment=True)
+
+
+@app.route('/documents/<int:document_id>/view')
+@login_required
+def view_document(document_id):
+    document = Document.query.get_or_404(document_id)
+    return send_from_directory(UPLOAD_FOLDER, document.filename, as_attachment=False)
 
 
 @app.route('/documents/<int:document_id>/sign')

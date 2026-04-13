@@ -7,7 +7,8 @@ Une application Web de suivi des commandes pour le processus interne du GHT ADS.
 - Authentification des utilisateurs
 - Rôles : ingénieur, fournisseur, acheteur
 - Création d’affaires par l’ingénieur
-- Téléversement de devis, bon de commande et bon de réception
+- Téléversement de devis, bon de commande et bon de réception en PDF
+- Visualisation des documents PDF dans l’interface
 - Signature numérique par l’ingénieur via un bouton dans l’interface
 - Notifications par email (stub configurable avec SMTP)
 - Stockage des fichiers PDF et données dans SQLite

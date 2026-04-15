@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block content %}
-<h1>Créer un compte fournisseur</h1>
+<h1>Créer un compte</h1>
 <form method="post">
     {{ form.hidden_tag() }}
     <div class="form-field">
@@ -10,6 +10,10 @@
     <div class="form-field">
         {{ form.email.label }}
         {{ form.email() }}
+    </div>
+    <div class="form-field">
+        {{ form.role.label }}
+        {{ form.role() }}
     </div>
     <div class="form-field">
         {{ form.password.label }}

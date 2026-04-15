@@ -41,6 +41,7 @@ app.config.update(
     MAIL_SERVER=os.environ.get('MAIL_SERVER', ''),
     MAIL_PORT=int(os.environ.get('MAIL_PORT', 25)),
     MAIL_USE_TLS=os.environ.get('MAIL_USE_TLS', 'false').lower() == 'true',
+    MAIL_USE_SSL=os.environ.get('MAIL_USE_SSL', 'false').lower() == 'true',
     MAIL_USERNAME=os.environ.get('MAIL_USERNAME'),
     MAIL_PASSWORD=os.environ.get('MAIL_PASSWORD'),
     MAIL_DEFAULT_SENDER=os.environ.get('MAIL_DEFAULT_SENDER', 'noreply@example.com'),
@@ -187,9 +188,18 @@ class LoginForm(FlaskForm):
 class RegisterForm(FlaskForm):
     username = StringField('Nom d’utilisateur', validators=[DataRequired(), Length(min=3, max=80)])
     email = StringField('Adresse e-mail', validators=[DataRequired(), Email()])
+    role = SelectField(
+        'Rôle',
+        choices=[
+            ('engineer', 'Ingénieur'),
+            ('supplier', 'Fournisseur'),
+            ('buyer', 'Acheteur'),
+        ],
+        validators=[DataRequired()],
+    )
     password = PasswordField('Mot de passe', validators=[DataRequired(), Length(min=6)])
     confirm = PasswordField('Confirmer le mot de passe', validators=[DataRequired(), EqualTo('password')])
-    submit = SubmitField('Créer un compte fournisseur')
+    submit = SubmitField('Créer un compte')
 
 
 class CaseForm(FlaskForm):
@@ -365,9 +375,14 @@ def send_email(recipient: str, subject: str, body: str):
     message.set_content(body)
 
     try:
-        smtp = smtplib.SMTP(app.config['MAIL_SERVER'], app.config['MAIL_PORT'], timeout=10)
-        if app.config['MAIL_USE_TLS']:
+        if app.config['MAIL_USE_SSL']:
+            smtp = smtplib.SMTP_SSL(app.config['MAIL_SERVER'], app.config['MAIL_PORT'], timeout=10)
+        else:
+            smtp = smtplib.SMTP(app.config['MAIL_SERVER'], app.config['MAIL_PORT'], timeout=10)
+        smtp.ehlo()
+        if app.config['MAIL_USE_TLS'] and not app.config['MAIL_USE_SSL']:
             smtp.starttls()
+            smtp.ehlo()
         if app.config['MAIL_USERNAME'] and app.config['MAIL_PASSWORD']:
             smtp.login(app.config['MAIL_USERNAME'], app.config['MAIL_PASSWORD'])
         smtp.send_message(message)
@@ -513,7 +528,7 @@ def register():
             user = User(
                 username=form.username.data,
                 email=form.email.data,
-                role='supplier',
+                role=form.role.data,
                 verified=False,
             )
             user.set_password(form.password.data)

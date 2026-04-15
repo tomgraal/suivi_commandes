@@ -3,7 +3,11 @@
 <h1>Affaire : {{ case.title }}</h1>
 <p><strong>Type :</strong> {{ case.type }}</p>
 <p><strong>Fournisseur :</strong> {{ case.supplier_email }}</p>
+<p><strong>Acheteur :</strong> {{ case.buyer_email or 'N/A' }}</p>
 <p><strong>Description :</strong> {{ case.description or 'N/A' }}</p>
+<p><strong>N° de compte :</strong> {{ case.account_number or 'N/A' }}</p>
+<p><strong>Code projet :</strong> {{ case.project_code or 'N/A' }}</p>
+<p><strong>N° UF :</strong> {{ case.uf_number or 'N/A' }}</p>
 
 <h2>Documents</h2>
 <ul>
@@ -45,6 +49,9 @@
     {% endif %}
     {% if current_user.role == 'buyer' and purchase_order and not reception %}
         <li><a class="button" href="{{ url_for('upload_document', case_id=case.id, doc_type='reception') }}">Déposer le bon de réception</a></li>
+    {% endif %}
+    {% if (current_user.role == 'engineer' and current_user.id == case.engineer_id) or (current_user.role == 'buyer' and case.buyer_email and current_user.email.lower() == case.buyer_email.lower()) %}
+        <li><a class="button" href="{{ url_for('edit_case', case_id=case.id) }}">Modifier l’affaire</a></li>
     {% endif %}
 </ul>
 {% endblock %}

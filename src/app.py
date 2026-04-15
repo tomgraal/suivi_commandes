@@ -237,19 +237,14 @@ def allowed_image(filename: str) -> bool:
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
 
 
-def create_signature_overlay(original_pdf_path: Path, signature, stamp_path: Path | None) -> Path:
-    reader = PdfReader(str(original_pdf_path))
-    first_page = reader.pages[0]
-    width = float(first_page.mediabox.width)
-    height = float(first_page.mediabox.height)
+def create_signature_overlay(page_width: float, page_height: float, page_rotation: int, signature, stamp_path: Path | None) -> Path:
     overlay_path = UPLOAD_FOLDER / f'overlay_{uuid.uuid4().hex}.pdf'
 
-    c = canvas.Canvas(str(overlay_path), pagesize=(width, height))
+    c = canvas.Canvas(str(overlay_path), pagesize=(page_width, page_height))
     margin = 40
-    image_x = width - margin
-    image_y = margin
     image_width = 0
     image_height = 0
+    text_align = 'right'
 
     if stamp_path and stamp_path.exists():
         try:
@@ -260,41 +255,70 @@ def create_signature_overlay(original_pdf_path: Path, signature, stamp_path: Pat
             ratio = min(max_w / iw, max_h / ih, 1)
             image_width = iw * ratio
             image_height = ih * ratio
-            image_x = width - image_width - margin
-            c.drawImage(image, image_x, image_y, width=image_width, height=image_height, mask='auto')
         except Exception:
             image_width = 0
             image_height = 0
 
-    text_x = width - margin
-    text_y = image_y + image_height + 12
+    rotation = page_rotation % 360
+    if rotation in (0, 90):
+        image_x = page_width - image_width - margin
+        text_x = page_width - margin
+        text_align = 'right'
+    else:
+        image_x = margin
+        text_x = margin
+        text_align = 'left'
+
+    if rotation in (0, 270):
+        image_y = margin
+        text_y = image_y + image_height + 12
+    else:
+        image_y = page_height - image_height - margin
+        text_y = image_y - 12
+
+    if stamp_path and stamp_path.exists() and image_width and image_height:
+        try:
+            image = ImageReader(str(stamp_path))
+            c.drawImage(image, image_x, image_y, width=image_width, height=image_height, mask='auto')
+        except Exception:
+            pass
+
     c.setFont('Helvetica-Bold', 12)
-    c.drawRightString(text_x, text_y, f'{signature.first_name} {signature.last_name}')
-    c.setFont('Helvetica', 11)
-    c.drawRightString(text_x, text_y - 16, signature.function_title)
-    c.drawRightString(text_x, text_y - 32, f'Date : {datetime.utcnow().strftime("%d/%m/%Y %H:%M")}')
+    if text_align == 'right':
+        c.drawRightString(text_x, text_y, f'{signature.first_name} {signature.last_name}')
+        c.setFont('Helvetica', 11)
+        c.drawRightString(text_x, text_y - 16, signature.function_title)
+        c.drawRightString(text_x, text_y - 32, f'Date : {datetime.utcnow().strftime("%d/%m/%Y %H:%M")}')
+    else:
+        c.drawString(text_x, text_y, f'{signature.first_name} {signature.last_name}')
+        c.setFont('Helvetica', 11)
+        c.drawString(text_x, text_y - 16, signature.function_title)
+        c.drawString(text_x, text_y - 32, f'Date : {datetime.utcnow().strftime("%d/%m/%Y %H:%M")}')
 
     c.save()
     return overlay_path
 
 
-def merge_signature_to_pdf(original_pdf_path: Path, overlay_pdf_path: Path, output_pdf_path: Path) -> None:
+def merge_signature_to_pdf(original_pdf_path: Path, signature, stamp_path: Path | None, output_pdf_path: Path) -> None:
     reader = PdfReader(str(original_pdf_path))
-    overlay = PdfReader(str(overlay_pdf_path))
-    overlay_page = overlay.pages[0]
     writer = PdfWriter()
 
     for page in reader.pages:
+        width = float(page.mediabox.width)
+        height = float(page.mediabox.height)
+        rotation = int(page.get('/Rotate', 0) or 0) % 360
+        overlay_path = create_signature_overlay(width, height, rotation, signature, stamp_path)
+        overlay = PdfReader(str(overlay_path))
+        overlay_page = overlay.pages[0]
         page.merge_page(overlay_page)
         writer.add_page(page)
+        try:
+            overlay_path.unlink()
+        except OSError:
+            pass
 
     with open(output_pdf_path, 'wb') as output_file:
         writer.write(output_file)
-
-    try:
-        overlay_pdf_path.unlink()
-    except OSError:
-        pass
 
 
 def ensure_directories():
@@ -406,6 +430,22 @@ def signature_settings():
 
     signature = current_user.signature or Signature(user_id=current_user.id)
     form = SignatureForm(obj=signature)
+
+    if request.method == 'POST' and 'delete_signature' in request.form:
+        if signature.id:
+            if signature.stamp_filename:
+                stamp_path = UPLOAD_FOLDER / signature.stamp_filename
+                try:
+                    if stamp_path.exists():
+                        stamp_path.unlink()
+                except OSError:
+                    pass
+            db.session.delete(signature)
+            db.session.commit()
+            flash('Signature supprimée.', 'success')
+        else:
+            flash('Aucune signature à supprimer.', 'warning')
+        return redirect(url_for('dashboard'))
 
     if form.validate_on_submit():
         signature.first_name = form.first_name.data
@@ -655,16 +695,16 @@ def sign_document(document_id):
         flash('Le fichier PDF est introuvable.', 'danger')
         return redirect(url_for('case_detail', case_id=case.id))
 
-    overlay_path = create_signature_overlay(
-        original_path,
-        current_user.signature,
-        UPLOAD_FOLDER / current_user.signature.stamp_filename if current_user.signature.stamp_filename else None,
-    )
     signed_filename = f'{case.id}_{document.type}_signed_{uuid.uuid4().hex}.pdf'
     signed_path = UPLOAD_FOLDER / signed_filename
 
     try:
-        merge_signature_to_pdf(original_path, overlay_path, signed_path)
+        merge_signature_to_pdf(
+            original_path,
+            current_user.signature,
+            UPLOAD_FOLDER / current_user.signature.stamp_filename if current_user.signature.stamp_filename else None,
+            signed_path,
+        )
     except Exception as exc:
         flash('Impossible de signer le PDF : %s' % exc, 'danger')
         return redirect(url_for('case_detail', case_id=case.id))
@@ -697,13 +737,28 @@ def sign_document(document_id):
 @login_required
 def delete_document(document_id):
     document = Document.query.get_or_404(document_id)
-    if document.is_signed:
-        flash('Impossible de supprimer un document déjà signé.', 'warning')
-        return redirect(url_for('case_detail', case_id=document.case.id))
+    case = document.case
 
-    if current_user.id != document.uploaded_by_id and current_user.role != 'engineer':
+    if document.is_signed:
+        if not (
+            current_user.role == 'engineer'
+            and current_user.id == case.engineer_id
+            and document.type in ('quote', 'purchase_order')
+        ) and not (
+            current_user.role == 'buyer'
+            and document.type in ('purchase_order', 'reception')
+        ):
+            flash('Impossible de supprimer un document déjà signé.', 'warning')
+            return redirect(url_for('case_detail', case_id=case.id))
+
+    allowed_to_delete = (
+        current_user.id == document.uploaded_by_id
+        or (current_user.role == 'engineer' and current_user.id == case.engineer_id)
+        or (current_user.role == 'buyer' and document.type in ('purchase_order', 'reception'))
+    )
+    if not allowed_to_delete:
         flash('Vous ne pouvez pas supprimer ce document.', 'warning')
-        return redirect(url_for('case_detail', case_id=document.case.id))
+        return redirect(url_for('case_detail', case_id=case.id))
 
     file_path = UPLOAD_FOLDER / document.filename
     try:
@@ -715,7 +770,7 @@ def delete_document(document_id):
     db.session.delete(document)
     db.session.commit()
     flash('Document supprimé.', 'success')
-    return redirect(url_for('case_detail', case_id=document.case.id))
+    return redirect(url_for('case_detail', case_id=case.id))
 
 
 if __name__ == '__main__':

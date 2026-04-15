@@ -27,6 +27,9 @@
     {% endif %}
     <div class="form-actions">
         {{ form.submit(class_='button') }}
+        {% if signature and signature.id %}
+            <button type="submit" name="delete_signature" class="button danger" onclick="return confirm('Supprimer votre signature ?')">Supprimer la signature</button>
+        {% endif %}
         <a class="button secondary" href="{{ url_for('dashboard') }}">Retour</a>
     </div>
 </form>

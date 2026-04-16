@@ -86,7 +86,7 @@ MAIL_PORT=587
 MAIL_USE_TLS=true
 MAIL_USE_SSL=false
 MAIL_USERNAME=vincentfluchere@gmail.com
-MAIL_PASSWORD=wwlo ywch ckvn swih
+MAIL_PASSWORD=
 MAIL_DEFAULT_SENDER=vincentfluchere@gmail.com
 ```
 

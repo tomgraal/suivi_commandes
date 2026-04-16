@@ -13,16 +13,18 @@
             <th>Affaire</th>
             <th>Type</th>
             <th>Fournisseur</th>
+            <th>Statut</th>
             <th>Documents</th>
             <th>Actions</th>
         </tr>
     </thead>
     <tbody>
       {% for case in cases %}
-        <tr>
+        <tr class="{{ case.status_class }}">
             <td>{{ case.title }}</td>
             <td>{{ case.type }}</td>
             <td>{{ case.supplier_email }}</td>
+            <td>{{ case.status }}</td>
             <td>
                 {% if case.get_document('quote') %}Devis{% endif %}
                 {% if case.get_document('purchase_order') %}, Bon de commande{% endif %}

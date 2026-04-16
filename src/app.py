@@ -639,6 +639,8 @@ UF_CHOICES = [
     ('BONI MAG.ALIMENTATION', 'BONI MAG.ALIMENTATION'),
 ]
 
+UF_CHOICES = [('', 'Sélectionnez un UF')] + sorted(UF_CHOICES[1:], key=lambda entry: entry[1].lower())
+
 DOCUMENT_TYPES = {
     'quote': 'Devis',
     'purchase_order': 'Bon de commande',
@@ -706,6 +708,24 @@ class Case(db.Model):
 
     def get_document(self, doc_type):
         return Document.query.filter_by(case_id=self.id, type=doc_type).order_by(Document.uploaded_at.desc()).first()
+
+    @property
+    def status(self):
+        reception = self.get_document('reception')
+        quote = self.get_document('quote')
+        if reception and reception.is_signed:
+            return 'Terminé'
+        if quote and quote.is_signed:
+            return 'En cours'
+        return 'En attente'
+
+    @property
+    def status_class(self):
+        return {
+            'En attente': 'status-pending',
+            'En cours': 'status-in-progress',
+            'Terminé': 'status-finished',
+        }.get(self.status, '')
 
     def has_signed_quote(self):
         quote = self.get_document('quote')
@@ -781,10 +801,9 @@ class CaseForm(FlaskForm):
     description = TextAreaField('Description')
     type = SelectField('Type de prestation', choices=CASE_TYPES, validators=[DataRequired()])
     object_contract = StringField('Objet du contrat')
-    start_date = StringField('Date d’effet')
+    start_date = StringField('Date d’effet', render_kw={'type': 'date'})
     duration = StringField('Durée')
     market = StringField('Marché')
-    budget = StringField('Budget investissement H')
     account_number = SelectField('N° de compte', choices=ACCOUNT_NUMBER_CHOICES)
     project_code = SelectField('Code projet', choices=PROJECT_CODE_CHOICES)
     uf_number = SelectField('N° UF', choices=UF_CHOICES)
@@ -1162,7 +1181,6 @@ def create_case():
             start_date=form.start_date.data,
             duration=form.duration.data,
             market=form.market.data,
-            budget=form.budget.data,
             account_number=form.account_number.data,
             project_code=form.project_code.data,
             uf_number=form.uf_number.data,
@@ -1222,7 +1240,6 @@ def edit_case(case_id):
         case.start_date = form.start_date.data
         case.duration = form.duration.data
         case.market = form.market.data
-        case.budget = form.budget.data
         case.account_number = form.account_number.data or None
         case.project_code = form.project_code.data or None
         case.uf_number = form.uf_number.data or None
@@ -1236,7 +1253,7 @@ def edit_case(case_id):
         flash('Affaire mise à jour.', 'success')
         return redirect(url_for('case_detail', case_id=case.id))
 
-    return render_template('case_form.html', form=form, edit=True, buyer_edit=buyer_edit)
+    return render_template('case_form.html', form=form, edit=True, buyer_edit=buyer_edit, case=case)
 
 
 @app.route('/cases/<int:case_id>')

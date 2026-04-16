@@ -1,6 +1,25 @@
 {% extends 'base.html' %}
 {% block content %}
 <h1>Affaire : {{ case.title }}</h1>
+{% if current_user.role in ['engineer', 'buyer'] %}
+<table>
+    <tr><th>Type</th><td>{{ case.type }}</td></tr>
+    <tr><th>Fournisseur</th><td>{{ case.supplier_email }}</td></tr>
+    <tr><th>Acheteur</th><td>{{ case.buyer_email or 'N/A' }}</td></tr>
+    <tr><th>Description</th><td>{{ case.description or 'N/A' }}</td></tr>
+    <tr><th>Objet du contrat</th><td>{{ case.object_contract or 'N/A' }}</td></tr>
+    <tr><th>Date d’effet</th><td>{{ case.start_date or 'N/A' }}</td></tr>
+    <tr><th>Durée</th><td>{{ case.duration or 'N/A' }}</td></tr>
+    <tr><th>Marché</th><td>{{ case.market or 'N/A' }}</td></tr>
+    <tr><th>N° de compte</th><td>{{ case.account_number or 'N/A' }}</td></tr>
+    <tr><th>Code projet</th><td>{{ case.project_code or 'N/A' }}</td></tr>
+    <tr><th>N° UF</th><td>{{ case.uf_number or 'N/A' }}</td></tr>
+    <tr><th>Désignation commande</th><td>{{ case.provider_designation or 'N/A' }}</td></tr>
+    <tr><th>Modalité de facturation</th><td>{{ case.billing_terms or 'N/A' }}</td></tr>
+    <tr><th>Facturation à réception de PV</th><td>{{ 'Oui' if case.invoice_on_delivery else 'Non' }}</td></tr>
+    <tr><th>Facturation à réception de commande</th><td>{{ 'Oui' if case.invoice_on_order else 'Non' }}</td></tr>
+</table>
+{% else %}
 <p><strong>Type :</strong> {{ case.type }}</p>
 <p><strong>Fournisseur :</strong> {{ case.supplier_email }}</p>
 <p><strong>Acheteur :</strong> {{ case.buyer_email or 'N/A' }}</p>
@@ -8,6 +27,7 @@
 <p><strong>N° de compte :</strong> {{ case.account_number or 'N/A' }}</p>
 <p><strong>Code projet :</strong> {{ case.project_code or 'N/A' }}</p>
 <p><strong>N° UF :</strong> {{ case.uf_number or 'N/A' }}</p>
+{% endif %}
 
 <h2>Documents</h2>
 <ul>

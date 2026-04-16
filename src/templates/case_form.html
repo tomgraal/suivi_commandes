@@ -13,7 +13,6 @@
     <div class="form-field"> {{ form.start_date.label }} {{ form.start_date() }} </div>
     <div class="form-field"> {{ form.duration.label }} {{ form.duration() }} </div>
     <div class="form-field"> {{ form.market.label }} {{ form.market() }} </div>
-    <div class="form-field"> {{ form.budget.label }} {{ form.budget() }} </div>
     <div class="form-field"> {{ form.account_number.label }} {{ form.account_number() }} </div>
     <div class="form-field"> {{ form.project_code.label }} {{ form.project_code() }} </div>
     <div class="form-field"> {{ form.uf_number.label }} {{ form.uf_number() }} </div>
@@ -23,6 +22,11 @@
     <div class="form-field"> {{ form.billing_terms.label }} {{ form.billing_terms() }} </div>
     <div class="form-field"> {{ form.invoice_on_delivery.label }} {{ form.invoice_on_delivery() }} </div>
     <div class="form-field"> {{ form.invoice_on_order.label }} {{ form.invoice_on_order() }} </div>
-    <div class="form-actions"> {{ form.submit(class_='button') }} </div>
+    <div class="form-actions">
+        <button type="submit" class="button">{{ 'Modifier' if edit else 'Créer l’affaire' }}</button>
+        {% if edit %}
+            <a class="button secondary" href="{{ url_for('case_detail', case_id=case.id) }}">Annuler</a>
+        {% endif %}
+    </div>
 </form>
 {% endblock %}

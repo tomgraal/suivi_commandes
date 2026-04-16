@@ -727,6 +727,17 @@ class Case(db.Model):
             'Terminé': 'status-finished',
         }.get(self.status, '')
 
+    @property
+    def opened_date(self):
+        return self.created_at
+
+    @property
+    def closed_date(self):
+        reception = self.get_document('reception')
+        if reception and reception.is_signed:
+            return reception.signed_at
+        return None
+
     def has_signed_quote(self):
         quote = self.get_document('quote')
         return bool(quote and quote.is_signed)
@@ -1032,13 +1043,54 @@ def before_request():
 @app.route('/')
 @login_required
 def dashboard():
+    sort_field = request.args.get('sort', '')
+    sort_direction = request.args.get('direction', 'desc')
+    search_query = request.args.get('q', '').strip()
+
     if current_user.role == 'engineer':
-        cases = Case.query.filter_by(engineer_id=current_user.id).order_by(Case.created_at.desc()).all()
+        query = Case.query.filter_by(engineer_id=current_user.id)
     elif current_user.role == 'supplier':
-        cases = Case.query.filter(Case.supplier_email.ilike(f'%{current_user.email}%')).order_by(Case.created_at.desc()).all()
+        query = Case.query.filter(Case.supplier_email.ilike(f'%{current_user.email}%'))
     else:
-        cases = Case.query.order_by(Case.created_at.desc()).all()
-    return render_template('dashboard.html', cases=cases)
+        query = Case.query
+
+    cases = query.all()
+
+    if search_query:
+        search_lower = search_query.lower()
+        cases = [
+            case for case in cases
+            if search_lower in (case.title or '').lower()
+            or search_lower in (case.type or '').lower()
+            or search_lower in (case.supplier_email or '').lower()
+            or search_lower in (case.buyer_email or '').lower()
+            or search_lower in (case.status or '').lower()
+        ]
+
+    if sort_field == 'title':
+        cases.sort(key=lambda c: (c.title or '').lower(), reverse=(sort_direction == 'desc'))
+    elif sort_field == 'opened_date':
+        cases.sort(
+            key=lambda c: c.opened_date or (datetime.min if sort_direction == 'desc' else datetime.max),
+            reverse=(sort_direction == 'desc'),
+        )
+    elif sort_field == 'closed_date':
+        cases.sort(
+            key=lambda c: c.closed_date or (datetime.min if sort_direction == 'desc' else datetime.max),
+            reverse=(sort_direction == 'desc'),
+        )
+    elif sort_field == 'status':
+        cases.sort(key=lambda c: (c.status or '').lower(), reverse=(sort_direction == 'desc'))
+    else:
+        cases.sort(key=lambda c: c.created_at or datetime.min, reverse=True)
+
+    return render_template(
+        'dashboard.html',
+        cases=cases,
+        sort_field=sort_field,
+        sort_direction=sort_direction,
+        search_query=search_query,
+    )
 
 
 @app.route('/signature', methods=['GET', 'POST'])

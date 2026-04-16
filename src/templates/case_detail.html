@@ -1,7 +1,11 @@
 {% extends 'base.html' %}
 {% block content %}
 <h1>Affaire : {{ case.title }}</h1>
-{% if current_user.role in ['engineer', 'buyer'] %}
+{% if current_user.role == 'supplier' %}
+    <p><strong>Nom de l'affaire :</strong> {{ case.title }}</p>
+    <p><strong>Description de l'affaire :</strong> {{ case.description or 'N/A' }}</p>
+    <p><strong>Mail de l'ingénieur :</strong> {{ case.engineer.email if case.engineer else 'N/A' }}</p>
+{% elif current_user.role in ['engineer', 'buyer'] %}
 <table>
     <tr><th>Type</th><td>{{ case.type }}</td></tr>
     <tr><th>Fournisseur</th><td>{{ case.supplier_email }}</td></tr>

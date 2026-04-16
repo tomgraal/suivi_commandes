@@ -46,6 +46,28 @@ table {
     margin-top: 16px;
 }
 
+.dashboard-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.dashboard-search {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.dashboard-search input[type="text"] {
+    padding: 8px;
+    border: 1px solid #cfd8dc;
+    border-radius: 4px;
+    min-width: 220px;
+}
+
 table th,
 table td {
     border: 1px solid #d8dee9;

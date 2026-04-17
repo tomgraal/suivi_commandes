@@ -13,13 +13,51 @@
     <div class="form-field"> {{ form.start_date.label }} {{ form.start_date() }} </div>
     <div class="form-field"> {{ form.duration.label }} {{ form.duration() }} </div>
     <div class="form-field"> {{ form.market.label }} {{ form.market() }} </div>
-    <div class="form-field"> {{ form.account_number.label }} {{ form.account_number() }} </div>
+    <div class="form-field">
+        <h2>Compte et modalité de paiement</h2>
+        <div id="case-rows">
+            <div class="form-row">
+                <div class="form-field-inline">
+                    {{ form.account_number.label }}
+                    <select id="account_number" name="account_number">
+                        {% for value, label in account_choices %}
+                            {% if label is string %}
+                                <option value="{{ value }}" {% if form.account_number.data == value %}selected{% endif %}>{{ label }}</option>
+                            {% else %}
+                                <optgroup label="{{ value }}">
+                                    {% for opt_value, opt_label in label %}
+                                        <option value="{{ opt_value }}" {% if form.account_number.data == opt_value %}selected{% endif %}>{{ opt_label }}</option>
+                                    {% endfor %}
+                                </optgroup>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-field-inline">
+                    {{ form.account_description.label }}
+                    {{ form.account_description() }}
+                </div>
+                <div class="form-field-inline">
+                    {{ form.billing_terms.label }}
+                    {{ form.billing_terms() }}
+                </div>
+                <div class="form-field-inline">
+                    {{ form.billing_description.label }}
+                    {{ form.billing_description() }}
+                </div>
+            </div>
+        </div>
+        <div id="extra-case-rows"></div>
+        <div class="form-row form-actions-row">
+            <button type="button" class="button small secondary" id="add-row">+ Ajouter</button>
+            <button type="button" class="button small secondary" id="remove-row">Supprimer</button>
+        </div>
+    </div>
     <div class="form-field"> {{ form.project_code.label }} {{ form.project_code() }} </div>
     <div class="form-field"> {{ form.uf_number.label }} {{ form.uf_number() }} </div>
     <div class="form-field"> {{ form.supplier_email.label }} {{ form.supplier_email() }} </div>
     <div class="form-field"> {{ form.buyer_email.label }} {{ form.buyer_email() }} </div>
     <div class="form-field"> {{ form.provider_designation.label }} {{ form.provider_designation() }} </div>
-    <div class="form-field"> {{ form.billing_terms.label }} {{ form.billing_terms() }} </div>
     <div class="form-field"> {{ form.invoice_on_delivery.label }} {{ form.invoice_on_delivery() }} </div>
     <div class="form-field"> {{ form.invoice_on_order.label }} {{ form.invoice_on_order() }} </div>
     <div class="form-actions">
@@ -29,4 +67,63 @@
         {% endif %}
     </div>
 </form>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const rowsContainer = document.getElementById('extra-case-rows');
+    const removeButton = document.getElementById('remove-row');
+    const accountOptions = document.querySelector('select[name="account_number"]').innerHTML;
+    const billingOptions = document.querySelector('select[name="billing_terms"]').innerHTML;
+    const extraRows = {{ extra_rows | tojson | safe }};
+
+    function updateRemoveButtonState() {
+        const rows = rowsContainer.querySelectorAll('.form-row');
+        removeButton.disabled = rows.length === 0;
+    }
+
+    function createRow(values) {
+        const row = document.createElement('div');
+        row.className = 'form-row extra-row';
+        row.innerHTML = `
+            <div class="form-field-inline">
+                <label>N° de compte</label>
+                <select name="extra_account_number[]">${accountOptions}</select>
+            </div>
+            <div class="form-field-inline">
+                <label>Montant</label>
+                <input type="text" name="extra_account_description[]" value="${values.account_description || ''}" placeholder="Montant">
+            </div>
+            <div class="form-field-inline">
+                <label>Modalité de facturation</label>
+                <select name="extra_billing_terms[]">${billingOptions}</select>
+            </div>
+            <div class="form-field-inline">
+                <label>Description</label>
+                <input type="text" name="extra_billing_description[]" value="${values.billing_description || ''}" placeholder="Description">
+            </div>
+        `;
+        row.querySelector('select[name="extra_account_number[]"]').value = values.account_number || '';
+        row.querySelector('select[name="extra_billing_terms[]"]').value = values.billing_terms || '';
+        rowsContainer.appendChild(row);
+        updateRemoveButtonState();
+    }
+
+    document.getElementById('add-row').addEventListener('click', function() {
+        createRow({account_number: '', account_description: '', billing_terms: '', billing_description: ''});
+    });
+
+    removeButton.addEventListener('click', function() {
+        const rows = rowsContainer.querySelectorAll('.form-row');
+        if (rows.length > 0) {
+            rows[rows.length - 1].remove();
+            updateRemoveButtonState();
+        }
+    });
+
+    extraRows.forEach(function(row) {
+        createRow(row);
+    });
+
+    updateRemoveButtonState();
+});
+</script>
 {% endblock %}

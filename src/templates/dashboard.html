@@ -42,7 +42,7 @@
                 {% if case.get_document('purchase_order') %}, Bon de commande{% endif %}
                 {% if case.get_document('reception') %}, Bon de réception{% endif %}
             </td>
-            <td><a href="{{ url_for('case_detail', case_id=case.id) }}">Voir</a></td>
+            <td><a class="button small primary" href="{{ url_for('case_detail', case_id=case.id) }}">Voir</a></td>
         </tr>
       {% else %}
         <tr><td colspan="8">Aucune affaire trouvée.</td></tr>

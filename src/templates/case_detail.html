@@ -15,11 +15,35 @@
     <tr><th>Date d’effet</th><td>{{ case.start_date or 'N/A' }}</td></tr>
     <tr><th>Durée</th><td>{{ case.duration or 'N/A' }}</td></tr>
     <tr><th>Marché</th><td>{{ case.market or 'N/A' }}</td></tr>
-    <tr><th>N° de compte</th><td>{{ case.account_number or 'N/A' }}</td></tr>
+    <tr><th>N° de compte | Description | Modalité de facturation | Description</th><td>
+        {% if case_rows %}
+            <table class="nested-table">
+                <thead>
+                    <tr>
+                        <th>N° de compte</th>
+                        <th>Description</th>
+                        <th>Modalité</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in case_rows %}
+                        <tr>
+                            <td>{{ row.account_number or 'N/A' }}</td>
+                            <td>{{ row.account_description or 'N/A' }}</td>
+                            <td>{{ row.billing_terms or 'N/A' }}</td>
+                            <td>{{ row.billing_description or 'N/A' }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            N/A
+        {% endif %}
+    </td></tr>
     <tr><th>Code projet</th><td>{{ case.project_code or 'N/A' }}</td></tr>
     <tr><th>N° UF</th><td>{{ case.uf_number or 'N/A' }}</td></tr>
     <tr><th>Désignation commande</th><td>{{ case.provider_designation or 'N/A' }}</td></tr>
-    <tr><th>Modalité de facturation</th><td>{{ case.billing_terms or 'N/A' }}</td></tr>
     <tr><th>Facturation à réception de PV</th><td>{{ 'Oui' if case.invoice_on_delivery else 'Non' }}</td></tr>
     <tr><th>Facturation à réception de commande</th><td>{{ 'Oui' if case.invoice_on_order else 'Non' }}</td></tr>
 </table>
@@ -28,7 +52,32 @@
 <p><strong>Fournisseur :</strong> {{ case.supplier_email }}</p>
 <p><strong>Acheteur :</strong> {{ case.buyer_email or 'N/A' }}</p>
 <p><strong>Description :</strong> {{ case.description or 'N/A' }}</p>
-<p><strong>N° de compte :</strong> {{ case.account_number or 'N/A' }}</p>
+<p><strong>N° de compte :</strong>
+    {% if case_rows %}
+        <table class="nested-table compact">
+            <thead>
+                <tr>
+                    <th>N° de compte</th>
+                    <th>Description</th>
+                    <th>Modalité</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in case_rows %}
+                    <tr>
+                        <td>{{ row.account_number or 'N/A' }}</td>
+                        <td>{{ row.account_description or 'N/A' }}</td>
+                        <td>{{ row.billing_terms or 'N/A' }}</td>
+                        <td>{{ row.billing_description or 'N/A' }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        N/A
+    {% endif %}
+</p>
 <p><strong>Code projet :</strong> {{ case.project_code or 'N/A' }}</p>
 <p><strong>N° UF :</strong> {{ case.uf_number or 'N/A' }}</p>
 {% endif %}
@@ -40,16 +89,16 @@
         <li>
             <strong>{{ label }} :</strong>
             {% if document %}
-                <a href="{{ url_for('view_document', document_id=document.id) }}" target="_blank" rel="noopener">Voir</a>
+                <a class="button small primary" href="{{ url_for('view_document', document_id=document.id) }}" target="_blank" rel="noopener">Voir</a>
                 |
-                <a href="{{ url_for('document_file', filename=document.filename) }}">Télécharger</a>
+                <a class="button small primary" href="{{ url_for('document_file', filename=document.filename) }}">Télécharger</a>
                 {% if document.is_signed %}
                     <span class="badge signed">Signé</span>
                 {% else %}
                     <span class="badge pending">En attente de signature</span>
                 {% endif %}
                 {% if current_user.is_authenticated and current_user.role == 'engineer' and current_user.id == case.engineer_id and not document.is_signed %}
-                    <a class="button small" href="{{ url_for('sign_document', document_id=document.id) }}">Signer</a>
+                    <a class="button small primary" href="{{ url_for('sign_document', document_id=document.id) }}">Signer</a>
                 {% endif %}
                 {% if (document.is_signed and ((current_user.role == 'engineer' and current_user.id == case.engineer_id and document.type in ['quote', 'purchase_order']) or (current_user.role == 'buyer' and document.type in ['purchase_order', 'reception']))) or (not document.is_signed and (current_user.role == 'engineer' or current_user.id == document.uploaded_by_id)) %}
                     <form method="post" action="{{ url_for('delete_document', document_id=document.id) }}" style="display:inline;">

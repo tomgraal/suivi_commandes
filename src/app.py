@@ -1,7 +1,9 @@
 import os
 import uuid
+import json
 from datetime import datetime
 from functools import wraps
+from itertools import zip_longest
 from pathlib import Path
 from email.message import EmailMessage
 import smtplib
@@ -69,7 +71,7 @@ CASE_TYPES = [
 
 ACCOUNT_NUMBER_CHOICES = [
     ('', 'Sélectionnez un N° de compte'),
-    ('Budget Exploitation CHICAS', [
+    ('BUDGET EXPLOITATION', [
         ('H606253', 'H606253 Achats non stockés fournitures informatiques'),
         ('H606254', 'H606254 Achats non stockés fournitures téléphoniques'),
         ('H612221', 'H612221 Crédit bail informatique : logiciels'),
@@ -77,7 +79,7 @@ ACCOUNT_NUMBER_CHOICES = [
         ('H6151610', 'H6151610 Maintenance progiciels à caractère médical'),
         ('H6151611', 'H6151611 Maintenance matériels à caractère médical'),
         ('H615254', 'H615254 Ent rép matériel inform caract non médical'),
-        ('H6152610', 'H6152610 Maintenance progiciels à caractère non médical'),
+        ('H6152610', 'H6152610 Maintenance progiciels à caractère non médical :'),
         ('H6152611', 'H6152611 Maintenance matériels  à caractère non médical'),
         ('H6152612', 'H6152612 Maintenance logiciels/ bureautiques/SGBD à caractère non médical'),
         ('H6152682', 'H6152682 Maintenance infrastructure téléphonie'),
@@ -90,7 +92,7 @@ ACCOUNT_NUMBER_CHOICES = [
         ('H6711010', 'H6711010 Intérêts moratoires et pénalités sur marché - SI'),
         ('H672808', 'H672808 Charges sur exercices antérieurs'),
     ]),
-    ('Budget exploitation CFPS Gap', [
+    ('BUDGET  EXPLOITATION - CFPS', [
         ('C61351', 'C61351 Locations informatiques'),
         ('C61554', 'C61554 Ent rep matériel informatique'),
         ('C615261', 'C615261 Maintenance informatique'),
@@ -99,9 +101,9 @@ ACCOUNT_NUMBER_CHOICES = [
         ('C6284', 'C6284 Prestations informatiques'),
     ]),
     ('BUDGET EXPLOITATION - GHT', [
-        ('G6151610', 'G6151610 Maintenance progiciels à caractère médical'),
+        ('G6151610', 'G6151610 Maintenance progiciels à caractère  médical'),
         ('G615254', 'G615254 Maintenance matériel non médical'),
-        ('G6152610', 'G6152610 Maintenance progiciels à caractère non médical'),
+        ('G6152610', 'G6152610 Maintenance progiciels à caractère non médical '),
         ('G6261', 'G6261 Liaisons informatiques ou spécialisées'),
         ('G6265', 'G6265 Telephonie GHT'),
         ('G6284', 'G6284 Prestations informatiques'),
@@ -115,7 +117,7 @@ ACCOUNT_NUMBER_CHOICES = [
         ('H2051207', 'H2051207 Progiciels dissociés - Plan Directeur'),
         ('H2052000', 'H2052000 Progiciels GHT'),
         ('H21832106', 'H21832106 Matériel informatique - Ets principal/PPSI'),
-        ('H21832107', 'H21832107 Matériel informatique - Ets principal - Plan Directeur'),
+        ('H21832107', 'H21832107 Matériel informatique - Ets principal - Plan Directeur '),
         ('H218325', 'H218325 Matériel informatique - CFPS'),
         ('H21832600', 'H21832600 Matériel informatique - GHT'),
         ('H237251206', 'H237251206 Acptes / cdes progiciels/PPSI/immob en cours'),
@@ -696,10 +698,10 @@ class Case(db.Model):
     supplier_email = db.Column(db.String(120), nullable=False)
     provider_designation = db.Column(db.String(200), nullable=True)
     buyer_email = db.Column('supplier_contact', db.String(120), nullable=True)
-    billing_terms = db.Column(db.String(120), nullable=True)
+    billing_terms = db.Column(db.Text, nullable=True)
     invoice_on_delivery = db.Column(db.Boolean, default=False)
     invoice_on_order = db.Column(db.Boolean, default=False)
-    account_number = db.Column(db.String(120), nullable=True)
+    account_number = db.Column(db.Text, nullable=True)
     project_code = db.Column(db.String(120), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     engineer_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
@@ -748,6 +750,12 @@ class Case(db.Model):
     def has_signed_reception(self):
         receipt = self.get_document('reception')
         return bool(receipt and receipt.is_signed)
+
+    def get_account_rows(self):
+        return normalize_case_rows(self.account_number)
+
+    def get_billing_rows(self):
+        return normalize_case_rows(self.billing_terms)
 
 
 class Document(db.Model):
@@ -816,12 +824,14 @@ class CaseForm(FlaskForm):
     duration = StringField('Durée')
     market = StringField('Marché')
     account_number = SelectField('N° de compte', choices=ACCOUNT_NUMBER_CHOICES)
+    account_description = StringField('Montant')
     project_code = SelectField('Code projet', choices=PROJECT_CODE_CHOICES)
     uf_number = SelectField('N° UF', choices=UF_CHOICES)
     supplier_email = StringField('Courriel du fournisseur', validators=[DataRequired(), Email()])
     buyer_email = StringField('Courriel de l’acheteur', validators=[DataRequired(), Email()])
     provider_designation = StringField('Désignation commande')
     billing_terms = SelectField('Modalité de facturation', choices=[('mensuel', 'mensuel'), ('trimestriel', 'trimestriel'), ('autre', 'Autre')])
+    billing_description = StringField('Description')
     invoice_on_delivery = SelectField('Facturation à réception de PV', choices=[('oui', 'Oui'), ('non', 'Non')])
     invoice_on_order = SelectField('Facturation à réception de commande', choices=[('oui', 'Oui'), ('non', 'Non')])
     submit = SubmitField('Créer l’affaire')
@@ -850,6 +860,79 @@ def allowed_file(filename: str) -> bool:
 
 def allowed_image(filename: str) -> bool:
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
+
+
+def normalize_case_rows(raw_value):
+    if not raw_value:
+        return []
+    if isinstance(raw_value, list):
+        data = raw_value
+    else:
+        try:
+            data = json.loads(raw_value)
+        except (ValueError, TypeError):
+            return [{'number': str(raw_value), 'description': ''}]
+
+    rows = []
+    if isinstance(data, list):
+        for item in data:
+            if isinstance(item, dict):
+                rows.append({
+                    'number': str(item.get('number') or item.get('value') or ''),
+                    'description': str(item.get('description') or ''),
+                })
+            else:
+                rows.append({'number': str(item), 'description': ''})
+    else:
+        rows.append({'number': str(data), 'description': ''})
+    return rows
+
+
+def combine_case_rows(account_rows, billing_rows):
+    rows = []
+    for account, billing in zip_longest(account_rows, billing_rows, fillvalue={}):
+        rows.append({
+            'account_number': account.get('number', '') if isinstance(account, dict) else str(account),
+            'account_description': account.get('description', '') if isinstance(account, dict) else '',
+            'billing_terms': billing.get('number', '') if isinstance(billing, dict) else str(billing),
+            'billing_description': billing.get('description', '') if isinstance(billing, dict) else '',
+        })
+    return rows
+
+
+def collect_case_rows():
+    rows = []
+    first_account = request.form.get('account_number', '').strip()
+    first_account_description = request.form.get('account_description', '').strip()
+    first_billing = request.form.get('billing_terms', '').strip()
+    first_billing_description = request.form.get('billing_description', '').strip()
+    if first_account or first_billing:
+        rows.append({
+            'account_number': first_account,
+            'account_description': first_account_description,
+            'billing_terms': first_billing,
+            'billing_description': first_billing_description,
+        })
+
+    extra_accounts = request.form.getlist('extra_account_number[]')
+    extra_account_descriptions = request.form.getlist('extra_account_description[]')
+    extra_billings = request.form.getlist('extra_billing_terms[]')
+    extra_billing_descriptions = request.form.getlist('extra_billing_description[]')
+    for account, account_description, billing, billing_description in zip_longest(
+        extra_accounts,
+        extra_account_descriptions,
+        extra_billings,
+        extra_billing_descriptions,
+        fillvalue='',
+    ):
+        if account or billing:
+            rows.append({
+                'account_number': account.strip(),
+                'account_description': account_description.strip(),
+                'billing_terms': billing.strip(),
+                'billing_description': billing_description.strip(),
+            })
+    return rows
 
 
 def create_signature_overlay(page_width: float, page_height: float, page_rotation: int, signature, stamp_path: Path | None) -> Path:
@@ -1225,6 +1308,7 @@ def verify_email(token):
 def create_case():
     form = CaseForm()
     if form.validate_on_submit():
+        rows = [item for item in collect_case_rows() if item['account_number'] or item['billing_terms']]
         case = Case(
             title=form.title.data,
             description=form.description.data,
@@ -1233,13 +1317,19 @@ def create_case():
             start_date=form.start_date.data,
             duration=form.duration.data,
             market=form.market.data,
-            account_number=form.account_number.data,
+            account_number=json.dumps([
+                {'number': item['account_number'], 'description': item['account_description']}
+                for item in rows
+            ], ensure_ascii=False) if rows else None,
             project_code=form.project_code.data,
             uf_number=form.uf_number.data,
             supplier_email=form.supplier_email.data,
             buyer_email=form.buyer_email.data,
             provider_designation=form.provider_designation.data,
-            billing_terms=form.billing_terms.data,
+            billing_terms=json.dumps([
+                {'number': item['billing_terms'], 'description': item['billing_description']}
+                for item in rows
+            ], ensure_ascii=False) if rows else None,
             invoice_on_delivery=form.invoice_on_delivery.data == 'oui',
             invoice_on_order=form.invoice_on_order.data == 'oui',
             engineer_id=current_user.id,
@@ -1265,7 +1355,7 @@ def create_case():
         flash('Affaire créée. Le fournisseur et l’acheteur ont été notifiés.', 'success')
         return redirect(url_for('dashboard'))
 
-    return render_template('case_form.html', form=form)
+    return render_template('case_form.html', form=form, extra_rows=[], account_choices=ACCOUNT_NUMBER_CHOICES)
 
 
 @app.route('/cases/<int:case_id>/edit', methods=['GET', 'POST'])
@@ -1292,20 +1382,44 @@ def edit_case(case_id):
         case.start_date = form.start_date.data
         case.duration = form.duration.data
         case.market = form.market.data
-        case.account_number = form.account_number.data or None
+        rows = [item for item in collect_case_rows() if item['account_number'] or item['billing_terms']]
+        case.account_number = json.dumps([
+            {'number': item['account_number'], 'description': item['account_description']}
+            for item in rows
+        ], ensure_ascii=False) if rows else None
         case.project_code = form.project_code.data or None
         case.uf_number = form.uf_number.data or None
         case.supplier_email = form.supplier_email.data
         case.buyer_email = form.buyer_email.data
         case.provider_designation = form.provider_designation.data
-        case.billing_terms = form.billing_terms.data
+        case.billing_terms = json.dumps([
+            {'number': item['billing_terms'], 'description': item['billing_description']}
+            for item in rows
+        ], ensure_ascii=False) if rows else None
         case.invoice_on_delivery = form.invoice_on_delivery.data == 'oui'
         case.invoice_on_order = form.invoice_on_order.data == 'oui'
         db.session.commit()
         flash('Affaire mise à jour.', 'success')
         return redirect(url_for('case_detail', case_id=case.id))
 
-    return render_template('case_form.html', form=form, edit=True, buyer_edit=buyer_edit, case=case)
+    account_rows = case.get_account_rows()
+    billing_rows = case.get_billing_rows()
+    combined_rows = combine_case_rows(account_rows, billing_rows)
+    if combined_rows:
+        form.account_number.data = combined_rows[0]['account_number']
+        form.account_description.data = combined_rows[0]['account_description']
+        form.billing_terms.data = combined_rows[0]['billing_terms']
+        form.billing_description.data = combined_rows[0]['billing_description']
+
+    return render_template(
+        'case_form.html',
+        form=form,
+        edit=True,
+        buyer_edit=buyer_edit,
+        case=case,
+        extra_rows=combined_rows[1:],
+        account_choices=ACCOUNT_NUMBER_CHOICES,
+    )
 
 
 @app.route('/cases/<int:case_id>')
@@ -1315,6 +1429,7 @@ def case_detail(case_id):
     quote = case.get_document('quote')
     purchase_order = case.get_document('purchase_order')
     reception = case.get_document('reception')
+    case_rows = combine_case_rows(case.get_account_rows(), case.get_billing_rows())
     return render_template(
         'case_detail.html',
         case=case,
@@ -1322,6 +1437,7 @@ def case_detail(case_id):
         purchase_order=purchase_order,
         reception=reception,
         doc_types=DOCUMENT_TYPES,
+        case_rows=case_rows,
     )
 
 

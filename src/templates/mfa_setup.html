@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Activer le MFA</h1>
+<p>Scannez ce QR code avec une application d’authentification comme Microsoft Authenticator ou Google Authenticator :</p>
+<img src="data:image/png;base64,{{ qr_b64 }}" alt="QR Code MFA" style="max-width:300px;" />
+<p>Ou utilisez ce code secret : <strong>{{ secret }}</strong></p>
+<form method="post">
+    {{ form.hidden_tag() }}
+    <div class="form-field">
+        {{ form.code.label }}
+        {{ form.code(class_='input') }}
+    </div>
+    <div class="form-actions">
+        {{ form.submit(class_='button') }}
+    </div>
+</form>
+{% endblock %}

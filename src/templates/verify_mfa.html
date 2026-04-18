@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Vérification MFA</h1>
+<p>Entrez le code affiché par votre application d’authentification.</p>
+<form method="post">
+    {{ form.hidden_tag() }}
+    <div class="form-field">
+        {{ form.code.label }}
+        {{ form.code(class_='input') }}
+    </div>
+    <div class="form-actions">
+        {{ form.submit(class_='button') }}
+    </div>
+</form>
+{% endblock %}

@@ -7,6 +7,9 @@
             <a class="button" href="{{ url_for('create_case') }}">Créer une nouvelle affaire</a>
             <a class="button secondary" href="{{ url_for('signature_settings') }}">Paramètres de signature</a>
         {% endif %}
+        {% if not current_user.mfa_enabled %}
+            <a class="button secondary" href="{{ url_for('mfa_setup') }}">Activer le MFA</a>
+        {% endif %}
     </div>
     <form method="get" action="{{ url_for('dashboard') }}" class="dashboard-search">
         <input type="text" name="q" value="{{ search_query }}" placeholder="Rechercher..." />

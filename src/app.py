@@ -17,6 +17,7 @@ from flask import (
     render_template,
     request,
     send_from_directory,
+    session,
     url_for,
 )
 from flask_login import LoginManager, UserMixin, current_user, login_required, login_user, logout_user
@@ -26,6 +27,10 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 from wtforms import DateField, PasswordField, SelectField, StringField, TextAreaField, SubmitField
 from wtforms.validators import DataRequired, Email, EqualTo, Length
+import io
+import base64
+import pyotp
+import qrcode
 from pypdf import PdfReader, PdfWriter
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
@@ -657,6 +662,8 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(256), nullable=False)
     role = db.Column(db.String(32), nullable=False)
     verified = db.Column(db.Boolean, default=False)
+    mfa_enabled = db.Column(db.Boolean, default=False)
+    mfa_secret = db.Column(db.String(32), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     cases_created = db.relationship('Case', backref='engineer', foreign_keys='Case.engineer_id')
@@ -796,6 +803,16 @@ class LoginForm(FlaskForm):
     username = StringField('Nom d’utilisateur', validators=[DataRequired(), Length(min=3, max=80)])
     password = PasswordField('Mot de passe', validators=[DataRequired()])
     submit = SubmitField('Se connecter')
+
+
+class MFASetupForm(FlaskForm):
+    code = StringField('Code de l’application', validators=[DataRequired(), Length(min=6, max=6)])
+    submit = SubmitField('Activer le MFA')
+
+
+class MFAVerifyForm(FlaskForm):
+    code = StringField('Code de validation', validators=[DataRequired(), Length(min=6, max=6)])
+    submit = SubmitField('Valider')
 
 
 class RegisterForm(FlaskForm):
@@ -1099,11 +1116,18 @@ def user_required(role):
 def ensure_database_schema():
     engine = db.engine
     if engine.url.drivername == 'sqlite':
-        with engine.connect() as conn:
+        with engine.begin() as conn:
             result = conn.execute(text("PRAGMA table_info('case')"))
             existing_columns = {row['name'] for row in result.mappings()}
             if 'project_code' not in existing_columns:
                 conn.execute(text('ALTER TABLE "case" ADD COLUMN project_code VARCHAR(120)'))
+
+            result = conn.execute(text("PRAGMA table_info('user')"))
+            user_columns = {row['name'] for row in result.mappings()}
+            if 'mfa_enabled' not in user_columns:
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN mfa_enabled BOOLEAN DEFAULT 0'))
+            if 'mfa_secret' not in user_columns:
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN mfa_secret VARCHAR(32)'))
 
 
 def initialize_database():
@@ -1239,12 +1263,88 @@ def login():
             if not user.verified:
                 flash('Votre compte n’est pas vérifié. Vérifiez votre email.', 'warning')
             else:
+                if user.mfa_enabled:
+                    session['pre_2fa_user_id'] = user.id
+                    return redirect(url_for('verify_mfa'))
                 login_user(user)
                 return redirect(url_for('dashboard'))
         else:
             flash('Nom d’utilisateur ou mot de passe incorrect.', 'danger')
 
     return render_template('login.html', form=form)
+
+
+@app.route('/mfa/setup', methods=['GET', 'POST'])
+@login_required
+def mfa_setup():
+    if current_user.mfa_enabled:
+        flash('MFA déjà activé.', 'info')
+        return redirect(url_for('dashboard'))
+
+    secret = session.get('mfa_secret')
+    if not secret:
+        secret = pyotp.random_base32()
+        session['mfa_secret'] = secret
+
+    totp = pyotp.TOTP(secret)
+    uri = totp.provisioning_uri(current_user.email, issuer_name='Suivi des commandes')
+    qr_img = qrcode.make(uri)
+    buffer = io.BytesIO()
+    qr_img.save(buffer, format='PNG')
+    qr_b64 = base64.b64encode(buffer.getvalue()).decode()
+
+    form = MFASetupForm()
+    if form.validate_on_submit():
+        if totp.verify(form.code.data, valid_window=1):
+            current_user.mfa_secret = secret
+            current_user.mfa_enabled = True
+            db.session.commit()
+            session.pop('mfa_secret', None)
+            flash('MFA activé.', 'success')
+            return redirect(url_for('dashboard'))
+        flash('Code invalide.', 'danger')
+
+    return render_template('mfa_setup.html', form=form, qr_b64=qr_b64, secret=secret)
+
+
+@app.route('/verify-mfa', methods=['GET', 'POST'])
+def verify_mfa():
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+
+    user_id = session.get('pre_2fa_user_id')
+    if not user_id:
+        return redirect(url_for('login'))
+
+    user = User.query.get(user_id)
+    if not user or not user.mfa_enabled or not user.mfa_secret:
+        session.pop('pre_2fa_user_id', None)
+        return redirect(url_for('login'))
+
+    form = MFAVerifyForm()
+    if form.validate_on_submit():
+        totp = pyotp.TOTP(user.mfa_secret)
+        if totp.verify(form.code.data, valid_window=1):
+            login_user(user)
+            session.pop('pre_2fa_user_id', None)
+            return redirect(url_for('dashboard'))
+        flash('Code TOTP invalide.', 'danger')
+
+    return render_template('verify_mfa.html', form=form)
+
+
+@app.route('/mfa/disable', methods=['POST'])
+@login_required
+def mfa_disable():
+    if not current_user.mfa_enabled:
+        flash('Le MFA n’est pas activé.', 'info')
+        return redirect(url_for('dashboard'))
+
+    current_user.mfa_enabled = False
+    current_user.mfa_secret = None
+    db.session.commit()
+    flash('MFA désactivé.', 'success')
+    return redirect(url_for('dashboard'))
 
 
 @app.route('/logout')

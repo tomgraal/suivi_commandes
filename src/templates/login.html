@@ -15,6 +15,7 @@
         {{ form.submit(class_='button') }}
     </div>
 </form>
+<p><a href="{{ url_for('reset_password_request') }}">J’ai oublié mon mot de passe</a></p>
 <p>Pas encore de compte ? <a href="{{ url_for('register') }}">Inscrivez-vous</a>.</p>
 <p>Comptes de démonstration : <strong>engineer/password</strong>, <strong>buyer/password</strong> et <strong>supplier/password</strong>.</p>
 {% endblock %}

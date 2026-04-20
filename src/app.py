@@ -788,6 +788,14 @@ class VerificationToken(db.Model):
     user = db.relationship('User', backref=db.backref('verification_token', uselist=False))
 
 
+class PasswordResetToken(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    token = db.Column(db.String(120), unique=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user = db.relationship('User', backref=db.backref('password_reset_tokens', lazy=True))
+
+
 class Signature(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), unique=True, nullable=False)
@@ -830,6 +838,17 @@ class RegisterForm(FlaskForm):
     password = PasswordField('Mot de passe', validators=[DataRequired(), Length(min=6)])
     confirm = PasswordField('Confirmer le mot de passe', validators=[DataRequired(), EqualTo('password')])
     submit = SubmitField('Créer un compte')
+
+
+class ForgotPasswordForm(FlaskForm):
+    email = StringField('Adresse e-mail', validators=[DataRequired(), Email()])
+    submit = SubmitField('Envoyer le lien de réinitialisation')
+
+
+class ResetPasswordForm(FlaskForm):
+    password = PasswordField('Nouveau mot de passe', validators=[DataRequired(), Length(min=6)])
+    confirm = PasswordField('Confirmer le mot de passe', validators=[DataRequired(), EqualTo('password')])
+    submit = SubmitField('Réinitialiser le mot de passe')
 
 
 class CaseForm(FlaskForm):
@@ -1272,6 +1291,52 @@ def login():
             flash('Nom d’utilisateur ou mot de passe incorrect.', 'danger')
 
     return render_template('login.html', form=form)
+
+
+@app.route('/reset-password', methods=['GET', 'POST'])
+def reset_password_request():
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+
+    form = ForgotPasswordForm()
+    if form.validate_on_submit():
+        user = User.query.filter(User.email.ilike(form.email.data.strip())).first()
+        if user:
+            token = PasswordResetToken(user_id=user.id, token=str(uuid.uuid4()))
+            db.session.add(token)
+            db.session.commit()
+            reset_url = url_for('reset_password', token=token.token, _external=True)
+            send_email(
+                user.email,
+                'Réinitialisation de votre mot de passe',
+                f'Bonjour {user.username},\n\nPour réinitialiser votre mot de passe, cliquez sur ce lien :\n{reset_url}\n\nSi vous n’avez pas demandé cette réinitialisation, ignorez ce message.',
+            )
+        flash('Si cette adresse existe, un lien de réinitialisation a été envoyé par e-mail.', 'info')
+        return redirect(url_for('login'))
+
+    return render_template('forgot_password.html', form=form)
+
+
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+
+    reset_token = PasswordResetToken.query.filter_by(token=token).first()
+    if not reset_token or (datetime.utcnow() - reset_token.created_at).total_seconds() > 24 * 3600:
+        flash('Lien de réinitialisation invalide ou expiré.', 'danger')
+        return redirect(url_for('reset_password_request'))
+
+    form = ResetPasswordForm()
+    if form.validate_on_submit():
+        user = reset_token.user
+        user.set_password(form.password.data)
+        db.session.delete(reset_token)
+        db.session.commit()
+        flash('Mot de passe réinitialisé. Vous pouvez vous connecter.', 'success')
+        return redirect(url_for('login'))
+
+    return render_template('reset_password.html', form=form)
 
 
 @app.route('/mfa/setup', methods=['GET', 'POST'])

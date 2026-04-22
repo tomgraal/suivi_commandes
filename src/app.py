@@ -25,7 +25,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_wtf import FlaskForm
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
-from wtforms import DateField, PasswordField, SelectField, StringField, TextAreaField, SubmitField
+from wtforms import BooleanField, DateField, PasswordField, SelectField, StringField, TextAreaField, SubmitField
 from wtforms.validators import DataRequired, Email, EqualTo, Length
 import io
 import base64
@@ -807,6 +807,51 @@ class Signature(db.Model):
     user = db.relationship('User', back_populates='signature')
 
 
+# GDPR/RGPD Models
+class UserConsent(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    consent_type = db.Column(db.String(50), nullable=False)  # privacy_policy, marketing, cookies
+    given = db.Column(db.Boolean, default=False)
+    given_at = db.Column(db.DateTime, nullable=True)
+    revoked_at = db.Column(db.DateTime, nullable=True)
+    ip_address = db.Column(db.String(45), nullable=True)
+    
+    user = db.relationship('User', backref='consents')
+
+
+class DataExportRequest(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    requested_at = db.Column(db.DateTime, default=datetime.utcnow)
+    export_date = db.Column(db.DateTime, nullable=True)
+    status = db.Column(db.String(20), default='pending')  # pending, completed, expired
+    export_file = db.Column(db.String(250), nullable=True)
+    
+    user = db.relationship('User', backref='export_requests')
+
+
+class DataDeletionRequest(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    requested_at = db.Column(db.DateTime, default=datetime.utcnow)
+    deletion_date = db.Column(db.DateTime, nullable=True)
+    status = db.Column(db.String(20), default='pending')  # pending, confirmed, completed
+    reason = db.Column(db.Text, nullable=True)
+    
+    user = db.relationship('User', backref='deletion_requests')
+
+
+class AuditLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    action = db.Column(db.String(100), nullable=False)
+    resource = db.Column(db.String(100), nullable=True)
+    details = db.Column(db.Text, nullable=True)
+    ip_address = db.Column(db.String(45), nullable=True)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 class LoginForm(FlaskForm):
     username = StringField('Nom d’utilisateur', validators=[DataRequired(), Length(min=3, max=80)])
     password = PasswordField('Mot de passe', validators=[DataRequired()])
@@ -837,6 +882,7 @@ class RegisterForm(FlaskForm):
     )
     password = PasswordField('Mot de passe', validators=[DataRequired(), Length(min=6)])
     confirm = PasswordField('Confirmer le mot de passe', validators=[DataRequired(), EqualTo('password')])
+    consent = BooleanField("J'accepte la politique de confidentialité et les conditions d'utilisation", validators=[DataRequired(message="Vous devez accepter la politique de confidentialité.")])
     submit = SubmitField('Créer un compte')
 
 
@@ -1113,6 +1159,22 @@ def send_email(recipient: str, subject: str, body: str):
         smtp.quit()
     except Exception as exc:
         app.logger.warning('Email send failed: %s', exc)
+
+
+def log_audit(action: str, resource: str = None, details: str = None):
+    """Log an action for audit trail and GDPR compliance"""
+    ip_address = request.remote_addr if request else None
+    user_id = current_user.id if current_user.is_authenticated else None
+    
+    audit = AuditLog(
+        user_id=user_id,
+        action=action,
+        resource=resource,
+        details=details,
+        ip_address=ip_address
+    )
+    db.session.add(audit)
+    db.session.commit()
 
 
 db_initialized = False
@@ -1439,9 +1501,23 @@ def register():
             user.set_password(form.password.data)
             db.session.add(user)
             db.session.commit()
+            
+            # Save GDPR consent from registration form
+            consent = UserConsent(
+                user_id=user.id,
+                consent_type='privacy_policy',
+                given=form.consent.data,
+                given_at=datetime.utcnow() if form.consent.data else None,
+                ip_address=request.remote_addr
+            )
+            db.session.add(consent)
+            
             token = VerificationToken(user_id=user.id, token=str(uuid.uuid4()))
             db.session.add(token)
             db.session.commit()
+            
+            log_audit('user_registration', 'user_' + str(user.id), 'New user registered')
+            
             verify_url = url_for('verify_email', token=token.token, _external=True)
             send_email(
                 user.email,
@@ -1777,6 +1853,206 @@ def delete_document(document_id):
     db.session.commit()
     flash('Document supprimé.', 'success')
     return redirect(url_for('case_detail', case_id=case.id))
+
+
+# GDPR/RGPD Routes
+@app.route('/privacy')
+def privacy():
+    """Display privacy policy and GDPR information"""
+    log_audit('view_privacy_policy')
+    return render_template('privacy.html')
+
+
+@app.route('/gdpr/consents', methods=['GET', 'POST'])
+@login_required
+def gdpr_consents():
+    """Manage user consents for GDPR compliance"""
+    if request.method == 'POST':
+        # Update consent preferences
+        consent_types = {
+            'privacy_policy': request.form.get('privacy_policy') == 'on',
+            'marketing': request.form.get('marketing') == 'on',
+            'analytics': request.form.get('analytics') == 'on',
+            'cookies': request.form.get('cookies') == 'on',
+        }
+        
+        for consent_type, value in consent_types.items():
+            consent = UserConsent.query.filter_by(
+                user_id=current_user.id,
+                consent_type=consent_type
+            ).first()
+            
+            if not consent:
+                consent = UserConsent(
+                    user_id=current_user.id,
+                    consent_type=consent_type
+                )
+            
+            if value:
+                consent.given = True
+                consent.given_at = datetime.utcnow()
+                consent.revoked_at = None
+            else:
+                consent.given = False
+                consent.revoked_at = datetime.utcnow()
+            
+            consent.ip_address = request.remote_addr
+            db.session.add(consent)
+        
+        db.session.commit()
+        log_audit('update_consents', 'user_' + str(current_user.id), 'Consent preferences updated')
+        flash('Vos préférences de consentement ont été mises à jour.', 'success')
+    
+    # Get current consents
+    consents = UserConsent.query.filter_by(user_id=current_user.id).all()
+    user_consent = {c.consent_type: c.given for c in consents}
+    
+    # Get consent history
+    consent_history = UserConsent.query.filter_by(user_id=current_user.id).all()
+    
+    return render_template('gdpr_consents.html', user_consent=user_consent, consent_history=consent_history)
+
+
+@app.route('/gdpr/export', methods=['GET', 'POST'])
+@login_required
+def gdpr_export():
+    """Handle data export requests (data portability - GDPR Article 20)"""
+    if request.method == 'POST':
+        if not request.form.get('confirm'):
+            flash('Vous devez confirmer votre demande.', 'warning')
+            return render_template('gdpr_export.html')
+        
+        # Create export request
+        export_request = DataExportRequest(
+            user_id=current_user.id,
+            status='pending'
+        )
+        db.session.add(export_request)
+        db.session.commit()
+        
+        log_audit('request_data_export', 'user_' + str(current_user.id), 'Export request ID: ' + str(export_request.id))
+        
+        # Send notification email
+        send_email(
+            current_user.email,
+            'Demande d\'export de vos données reçue',
+            '''Bonjour,
+
+Nous avons reçu votre demande d'export de vos données personnelles (droit à la portabilité - RGPD article 20).
+
+Votre demande sera traitée dans les 30 jours. Vous recevrez un email avec un lien de téléchargement une fois l'export prêt.
+
+Cordialement,
+L'équipe de gestion des données
+'''
+        )
+        
+        flash('Votre demande d\'export a été enregistrée. Vous recevrez un email quand l\'export sera prêt.', 'success')
+    
+    # Get previous exports
+    exports = DataExportRequest.query.filter_by(user_id=current_user.id).all()
+    
+    return render_template('gdpr_export.html', exports=exports, timedelta=__import__('datetime').timedelta)
+
+
+@app.route('/gdpr/delete', methods=['GET', 'POST'])
+@login_required
+def gdpr_delete():
+    """Handle account deletion requests (right to be forgotten - GDPR Article 17)"""
+    deletion_pending = DataDeletionRequest.query.filter_by(
+        user_id=current_user.id,
+        status='pending'
+    ).first()
+    
+    if request.method == 'POST':
+        if not request.form.get('confirm1') or not request.form.get('confirm2'):
+            flash('Vous devez cocher les deux cases de confirmation.', 'warning')
+            return render_template('gdpr_delete.html', deletion_pending=deletion_pending)
+        
+        # Create deletion request
+        reason = request.form.get('reason', '').strip()
+        deletion = DataDeletionRequest(
+            user_id=current_user.id,
+            status='pending',
+            reason=reason
+        )
+        db.session.add(deletion)
+        db.session.commit()
+        
+        log_audit('request_account_deletion', 'user_' + str(current_user.id), 'Deletion request ID: ' + str(deletion.id))
+        
+        # Send confirmation email
+        send_email(
+            current_user.email,
+            'Confirmation de la suppression de votre compte',
+            '''Bonjour,
+
+Vous avez demandé la suppression de votre compte (droit à l'oubli - RGPD article 17).
+
+IMPORTANT : Cliquez sur le lien ci-dessous DANS LES 7 JOURS pour confirmer la suppression de votre compte et de vos données personnelles.
+Après 7 jours, cette demande expirera.
+
+Votre compte sera supprimé dans les 30 jours suivant la confirmation.
+
+Cordialement,
+L'équipe de gestion des données
+'''
+        )
+        
+        deletion_pending = deletion
+        flash('Un email de confirmation a été envoyé. Vous avez 7 jours pour confirmer.', 'info')
+    
+    return render_template('gdpr_delete.html', deletion_pending=deletion_pending)
+
+
+@app.route('/gdpr/delete/confirm', methods=['POST'])
+@login_required
+def gdpr_delete_confirm():
+    """Confirm account deletion request"""
+    deletion = DataDeletionRequest.query.filter_by(
+        user_id=current_user.id,
+        status='pending'
+    ).first()
+    
+    if not deletion:
+        flash('Aucune demande de suppression en attente.', 'warning')
+        return redirect(url_for('dashboard'))
+    
+    # Check if request is still valid (within 7 days)
+    if (datetime.utcnow() - deletion.requested_at).days > 7:
+        deletion.status = 'expired'
+        db.session.commit()
+        flash('Votre demande de suppression a expiré. Veuillez en faire une nouvelle.', 'warning')
+        return redirect(url_for('gdpr_delete'))
+    
+    # Mark as confirmed
+    deletion.status = 'confirmed'
+    deletion.deletion_date = datetime.utcnow() + __import__('datetime').timedelta(days=30)
+    db.session.commit()
+    
+    log_audit('confirm_account_deletion', 'user_' + str(current_user.id), 'Account deletion confirmed')
+    
+    flash('Votre demande de suppression a été confirmée. Votre compte sera supprimé dans 30 jours.', 'success')
+    logout_user()
+    return redirect(url_for('login'))
+
+
+@app.route('/gdpr/delete/cancel', methods=['GET'])
+@login_required
+def gdpr_delete_cancel():
+    """Cancel pending account deletion request"""
+    deletion = DataDeletionRequest.query.filter_by(
+        user_id=current_user.id,
+        status='pending'
+    ).first()
+    
+    if deletion:
+        db.session.delete(deletion)
+        db.session.commit()
+        log_audit('cancel_account_deletion', 'user_' + str(current_user.id))
+        flash('Votre demande de suppression a été annulée.', 'success')
+    
+    return redirect(url_for('dashboard'))
 
 
 if __name__ == '__main__':

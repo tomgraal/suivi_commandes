@@ -16,11 +16,13 @@
                 {% if current_user.role == 'engineer' %}
                     <a href="{{ url_for('signature_settings') }}">Signature</a>
                 {% endif %}
+                <a href="{{ url_for('gdpr_consents') }}" title="Gérer vos consentements RGPD">RGPD</a>
                 <a href="{{ url_for('logout') }}">Déconnexion</a>
             {% else %}
                 <a href="{{ url_for('login') }}">Connexion</a>
                 <a href="{{ url_for('register') }}">Créer un compte</a>
             {% endif %}
+            <a href="{{ url_for('privacy') }}" title="Politique de confidentialité">Confidentialité</a>
         </div>
     </div>
 </nav>
@@ -36,5 +38,16 @@
     {% endwith %}
     {% block content %}{% endblock %}
 </div>
+<footer style="margin-top: 3rem; padding-top: 2rem; border-top: 1px solid #ccc; text-align: center; color: #666; font-size: 0.9em;">
+    <p>
+        <a href="{{ url_for('privacy') }}">Politique de Confidentialité</a> | 
+        {% if current_user.is_authenticated %}
+        <a href="{{ url_for('gdpr_consents') }}">Gérer mes consentements</a> | 
+        <a href="{{ url_for('gdpr_export') }}">Exporter mes données</a> | 
+        <a href="{{ url_for('gdpr_delete') }}">Supprimer mon compte</a> | 
+        {% endif %}
+        Conformité RGPD
+    </p>
+</footer>
 </body>
 </html>

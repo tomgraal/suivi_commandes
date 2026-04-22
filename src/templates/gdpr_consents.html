@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <h1>Gérer mes consentements</h1>
+            <p class="text-muted">Contrôlez vos consentements RGPD et vos préférences de communication.</p>
+            <hr>
+
+            {% if message %}
+            <div class="alert alert-success">{{ message }}</div>
+            {% endif %}
+
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5>Consentements actuels</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('gdpr_consents') }}">
+                        
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="privacy_policy" name="privacy_policy" 
+                                   {% if user_consent.privacy_policy %}checked{% endif %} required>
+                            <label class="form-check-label" for="privacy_policy">
+                                <strong>Politique de confidentialité</strong><br>
+                                <small>Je reconnais avoir lu et accepté la politique de confidentialité.</small>
+                            </label>
+                        </div>
+
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="marketing" name="marketing"
+                                   {% if user_consent.marketing %}checked{% endif %}>
+                            <label class="form-check-label" for="marketing">
+                                <strong>Communications de marketing</strong><br>
+                                <small>Je souhaite recevoir des informations sur les mises à jour et nouveautés.</small>
+                            </label>
+                        </div>
+
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="analytics" name="analytics"
+                                   {% if user_consent.analytics %}checked{% endif %}>
+                            <label class="form-check-label" for="analytics">
+                                <strong>Analytique</strong><br>
+                                <small>Je consens au suivi de mon activité pour améliorer l'application.</small>
+                            </label>
+                        </div>
+
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="cookies" name="cookies"
+                                   {% if user_consent.cookies %}checked{% endif %}>
+                            <label class="form-check-label" for="cookies">
+                                <strong>Cookies non-essentiels</strong><br>
+                                <small>Je consens à l'utilisation de cookies pour améliorer l'expérience utilisateur.</small>
+                            </label>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">Sauvegarder mes préférences</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5>Historique des consentements</h5>
+                </div>
+                <div class="card-body">
+                    {% if consent_history %}
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Statut</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for entry in consent_history %}
+                            <tr>
+                                <td>{{ entry.type }}</td>
+                                <td>
+                                    {% if entry.given %}
+                                    <span class="badge badge-success">Accordé</span>
+                                    {% else %}
+                                    <span class="badge badge-secondary">Refusé</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ entry.given_at.strftime('%d/%m/%Y %H:%M') if entry.given_at else 'N/A' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <p class="text-muted">Aucun historique disponible.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="mt-4">
+                <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Retour au tableau de bord</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

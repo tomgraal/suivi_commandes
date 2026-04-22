@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <h1>Supprimer mon compte</h1>
+            <p class="text-muted">Exercer votre droit à l'oubli (RGPD article 17)</p>
+            <hr>
+
+            {% if message %}
+            <div class="alert alert-success">{{ message }}</div>
+            {% endif %}
+
+            {% if error %}
+            <div class="alert alert-danger">{{ error }}</div>
+            {% endif %}
+
+            {% if deletion_pending %}
+            <div class="alert alert-warning">
+                <strong>Suppression en attente de confirmation</strong>
+                <p>
+                    Votre demande de suppression a été enregistrée le 
+                    {{ deletion_pending.requested_at.strftime('%d/%m/%Y à %H:%M') }}.
+                </p>
+                <p>
+                    Un email de confirmation a été envoyé à votre adresse. 
+                    Vous avez 7 jours pour confirmer cette demande avant que votre compte ne soit supprimé définitivement.
+                </p>
+                <form method="POST" action="{{ url_for('gdpr_delete_confirm') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger" onclick="return confirm('Confirmer la suppression ? Cette action est irréversible.')">
+                        Confirmer la suppression maintenant
+                    </button>
+                    <a href="{{ url_for('gdpr_delete_cancel') }}" class="btn btn-secondary">Annuler la suppression</a>
+                </form>
+            </div>
+            {% else %}
+
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h5>⚠️ Zone dangereuse</h5>
+                </div>
+                <div class="card-body">
+                    <h5 class="card-title">Droit à l'oubli</h5>
+                    <p class="card-text">
+                        Conformément au RGPD article 17, vous avez le droit de demander la suppression de votre compte
+                        et de toutes vos données personnelles.
+                    </p>
+
+                    <div class="alert alert-danger">
+                        <strong>Attention ! Cette action est irréversible :</strong>
+                        <ul>
+                            <li>Votre compte sera supprimé</li>
+                            <li>Vos données personnelles seront effacées</li>
+                            <li>Vous ne pourrez plus accéder à l'application</li>
+                            <li>Les documents signes resteront disponibles pour les autres utilisateurs (obligations légales)</li>
+                        </ul>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <strong>Processus de suppression :</strong>
+                        <ol>
+                            <li>Vous recevrez un email de confirmation</li>
+                            <li>Vous devez cliquer sur le lien de confirmation dans l'email</li>
+                            <li>Vous avez 7 jours pour confirmer votre demande</li>
+                            <li>Après confirmation, vos données seront supprimées sous 30 jours</li>
+                        </ol>
+                    </div>
+
+                    <form method="POST" action="{{ url_for('gdpr_delete') }}" 
+                          onsubmit="return confirm('Êtes-vous sûr ? Vous allez recevoir un email de confirmation.');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        <div class="form-group mb-3">
+                            <label for="reason">
+                                <strong>Raison de la suppression (optionnel) :</strong>
+                            </label>
+                            <textarea class="form-control" id="reason" name="reason" rows="3" 
+                                      placeholder="Dites-nous pourquoi vous quittez..."></textarea>
+                        </div>
+
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="confirm1" name="confirm1" required>
+                            <label class="form-check-label" for="confirm1">
+                                Je comprends que cette action est <strong>irréversible</strong>.
+                            </label>
+                        </div>
+
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="confirm2" name="confirm2" required>
+                            <label class="form-check-label" for="confirm2">
+                                Je souhaite recevoir un email de confirmation avant la suppression finale.
+                            </label>
+                        </div>
+
+                        <button type="submit" class="btn btn-danger btn-lg">
+                            Demander la suppression de mon compte
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="mt-4">
+                <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Retour au tableau de bord</a>
+            </div>
+
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

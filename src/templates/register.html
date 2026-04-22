@@ -23,6 +23,22 @@
         {{ form.confirm.label }}
         {{ form.confirm() }}
     </div>
+    <div class="form-field">
+        {% if form.consent %}
+        <div class="form-check">
+            {{ form.consent(class_='form-check-input') }}
+            {{ form.consent.label(class_='form-check-label') }}
+            <small class="d-block text-muted mt-1">
+                Veuillez consulter notre <a href="{{ url_for('privacy') }}" target="_blank">politique de confidentialité</a>
+            </small>
+        </div>
+        {% if form.consent.errors %}
+        <div class="alert alert-danger mt-2">
+            {{ form.consent.errors[0] }}
+        </div>
+        {% endif %}
+        {% endif %}
+    </div>
     <div class="form-actions">
         {{ form.submit(class_='button') }}
     </div>

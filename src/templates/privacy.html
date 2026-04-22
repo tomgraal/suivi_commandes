@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <h1>Politique de Confidentialité et Conditions d'Utilisation</h1>
+            <p class="text-muted">Dernière mise à jour : Avril 2026</p>
+            <hr>
+
+            <h2>1. Introduction</h2>
+            <p>
+                Cette politique de confidentialité décrit comment notre application traite vos données personnelles
+                conformément au Règlement Général sur la Protection des Données (RGPD).
+            </p>
+
+            <h2>2. Responsable du Traitement</h2>
+            <p>
+                Responsable : Administration Hospitalière<br>
+                Contact : dpo@example.com
+            </p>
+
+            <h2>3. Données Personnelles Collectées</h2>
+            <ul>
+                <li><strong>Données d'identification :</strong> nom d'utilisateur, adresse e-mail, mot de passe hachifié</li>
+                <li><strong>Données de profil :</strong> rôle utilisateur, fonction, signature électronique</li>
+                <li><strong>Données d'activité :</strong> adresses IP, horodatages, actions effectuées dans l'application</li>
+                <li><strong>Données de contrats :</strong> informations relatives aux marchés publics et documents associés</li>
+            </ul>
+
+            <h2>4. Base Légale du Traitement</h2>
+            <ul>
+                <li><strong>Exécution du contrat :</strong> traitement nécessaire pour la gestion des affaires et documents</li>
+                <li><strong>Consentement :</strong> obtenu lors de l'inscription et pour les communications</li>
+                <li><strong>Obligations légales :</strong> conservation des données à des fins d'audit</li>
+                <li><strong>Intérêts légitimes :</strong> sécurité de la plateforme</li>
+            </ul>
+
+            <h2>5. Destinataires des Données</h2>
+            <p>
+                Vos données ne sont partagées qu'avec :
+            </p>
+            <ul>
+                <li>Les utilisateurs autorisés de l'application</li>
+                <li>Les prestataires informatiques nécessaires à l'hébergement</li>
+                <li>Les autorités publiques si légalement requis</li>
+            </ul>
+
+            <h2>6. Durée de Conservation</h2>
+            <ul>
+                <li><strong>Comptes actifs :</strong> pendant toute la durée d'utilisation</li>
+                <li><strong>Données après suppression :</strong> 90 jours (délai de rétraction)</li>
+                <li><strong>Logs et audit :</strong> 1 an minimum</li>
+                <li><strong>Documents contractuels :</strong> 6 ans minimum</li>
+            </ul>
+
+            <h2>7. Vos Droits RGPD</h2>
+            <p>
+                En tant que personne concernée, vous avez le droit de :
+            </p>
+            <ul>
+                <li><strong>Droit d'accès :</strong> consulter vos données et télécharger un export</li>
+                <li><strong>Droit de rectification :</strong> corriger vos données</li>
+                <li><strong>Droit à l'oubli :</strong> demander la suppression de votre compte</li>
+                <li><strong>Droit de limitation :</strong> limiter le traitement</li>
+                <li><strong>Droit à la portabilité :</strong> recevoir vos données structurées</li>
+                <li><strong>Droit d'opposition :</strong> vous opposer au traitement</li>
+            </ul>
+
+            <div class="alert alert-info mt-4">
+                <h5>Exercer vos droits</h5>
+                <p>
+                    Pour exercer vos droits, connectez-vous et accédez aux options RGPD, 
+                    ou contactez notre DPO à : <strong>dpo@example.com</strong>
+                </p>
+            </div>
+
+            <h2>8. Sécurité des Données</h2>
+            <ul>
+                <li>Chiffrement des mots de passe (bcrypt)</li>
+                <li>Authentification à deux facteurs (MFA)</li>
+                <li>Connexions HTTPS obligatoires</li>
+                <li>Logs d'audit pour les accès</li>
+                <li>Limitation des accès par rôles</li>
+            </ul>
+
+            <h2>9. Cookies et Suivi</h2>
+            <p>
+                L'application utilise les cookies pour gérer l'authentification et améliorer l'expérience utilisateur.
+                Vous pouvez gérer vos préférences de cookies dans vos paramètres.
+            </p>
+
+            <h2>10. Modifications de Cette Politique</h2>
+            <p>
+                Les modifications seront notifiées aux utilisateurs par email.
+            </p>
+
+            <h2>11. Réclamations</h2>
+            <p>
+                Si vous estimez que vos droits RGPD n'ont pas été respectés, vous pouvez déposer plainte auprès
+                de votre autorité de protection des données locale.
+            </p>
+
+            <hr>
+
+            {% if current_user.is_authenticated %}
+            <div class="mt-5">
+                <h3>Options RGPD</h3>
+                <div class="btn-group" role="group">
+                    <a href="{{ url_for('gdpr_consents') }}" class="btn btn-primary">Gérer les consentements</a>
+                    <a href="{{ url_for('gdpr_export') }}" class="btn btn-info">Exporter mes données</a>
+                    <a href="{{ url_for('gdpr_delete') }}" class="btn btn-danger">Supprimer mon compte</a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

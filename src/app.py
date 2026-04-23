@@ -852,6 +852,19 @@ class AuditLog(db.Model):
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class CaseChangeLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    case_id = db.Column(db.Integer, db.ForeignKey('case.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    field_name = db.Column(db.String(100), nullable=False)
+    old_value = db.Column(db.Text, nullable=True)
+    new_value = db.Column(db.Text, nullable=True)
+    changed_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    case = db.relationship('Case', backref=db.backref('change_logs', lazy=True, cascade='all, delete-orphan'))
+    user = db.relationship('User', backref='case_change_logs')
+
+
 class LoginForm(FlaskForm):
     username = StringField('Nom d’utilisateur', validators=[DataRequired(), Length(min=3, max=80)])
     password = PasswordField('Mot de passe', validators=[DataRequired()])
@@ -1175,6 +1188,30 @@ def log_audit(action: str, resource: str = None, details: str = None):
     )
     db.session.add(audit)
     db.session.commit()
+
+
+def log_case_change(case: 'Case', field_name: str, old_value, new_value):
+    """Log a change to a case field for traceability"""
+    # Don't log if values are identical
+    if old_value == new_value:
+        return
+    
+    # Convert values to strings for storage
+    old_str = json.dumps(old_value, ensure_ascii=False) if not isinstance(old_value, str) else old_value
+    new_str = json.dumps(new_value, ensure_ascii=False) if not isinstance(new_value, str) else new_value
+    
+    # Truncate very long strings
+    old_str = old_str[:500] if old_str else None
+    new_str = new_str[:500] if new_str else None
+    
+    change_log = CaseChangeLog(
+        case_id=case.id,
+        user_id=current_user.id if current_user.is_authenticated else None,
+        field_name=field_name,
+        old_value=old_str,
+        new_value=new_str
+    )
+    db.session.add(change_log)
 
 
 db_initialized = False
@@ -1615,6 +1652,37 @@ def edit_case(case_id):
         form.title.render_kw = {'readonly': True, 'disabled': True}
 
     if form.validate_on_submit():
+        # Track changes for the changelog
+        if not buyer_edit and case.title != form.title.data:
+            log_case_change(case, 'title', case.title, form.title.data)
+        if case.description != form.description.data:
+            log_case_change(case, 'description', case.description, form.description.data)
+        if case.type != form.type.data:
+            log_case_change(case, 'type', case.type, form.type.data)
+        if case.object_contract != form.object_contract.data:
+            log_case_change(case, 'object_contract', case.object_contract, form.object_contract.data)
+        if case.start_date != form.start_date.data:
+            log_case_change(case, 'start_date', case.start_date, form.start_date.data)
+        if case.duration != form.duration.data:
+            log_case_change(case, 'duration', case.duration, form.duration.data)
+        if case.market != form.market.data:
+            log_case_change(case, 'market', case.market, form.market.data)
+        if case.supplier_email != form.supplier_email.data:
+            log_case_change(case, 'supplier_email', case.supplier_email, form.supplier_email.data)
+        if case.buyer_email != form.buyer_email.data:
+            log_case_change(case, 'buyer_email', case.buyer_email, form.buyer_email.data)
+        if case.provider_designation != form.provider_designation.data:
+            log_case_change(case, 'provider_designation', case.provider_designation, form.provider_designation.data)
+        if case.project_code != (form.project_code.data or None):
+            log_case_change(case, 'project_code', case.project_code, form.project_code.data or None)
+        if case.uf_number != (form.uf_number.data or None):
+            log_case_change(case, 'uf_number', case.uf_number, form.uf_number.data or None)
+        if case.invoice_on_delivery != (form.invoice_on_delivery.data == 'oui'):
+            log_case_change(case, 'invoice_on_delivery', case.invoice_on_delivery, form.invoice_on_delivery.data == 'oui')
+        if case.invoice_on_order != (form.invoice_on_order.data == 'oui'):
+            log_case_change(case, 'invoice_on_order', case.invoice_on_order, form.invoice_on_order.data == 'oui')
+        
+        # Apply the changes
         if not buyer_edit:
             case.title = form.title.data
         case.description = form.description.data
@@ -1624,19 +1692,27 @@ def edit_case(case_id):
         case.duration = form.duration.data
         case.market = form.market.data
         rows = [item for item in collect_case_rows() if item['account_number'] or item['billing_terms']]
-        case.account_number = json.dumps([
+        new_account_number = json.dumps([
             {'number': item['account_number'], 'description': item['account_description']}
             for item in rows
         ], ensure_ascii=False) if rows else None
+        new_billing_terms = json.dumps([
+            {'number': item['billing_terms'], 'description': item['billing_description']}
+            for item in rows
+        ], ensure_ascii=False) if rows else None
+        
+        if case.account_number != new_account_number:
+            log_case_change(case, 'account_number', case.account_number, new_account_number)
+        if case.billing_terms != new_billing_terms:
+            log_case_change(case, 'billing_terms', case.billing_terms, new_billing_terms)
+        
+        case.account_number = new_account_number
         case.project_code = form.project_code.data or None
         case.uf_number = form.uf_number.data or None
         case.supplier_email = form.supplier_email.data
         case.buyer_email = form.buyer_email.data
         case.provider_designation = form.provider_designation.data
-        case.billing_terms = json.dumps([
-            {'number': item['billing_terms'], 'description': item['billing_description']}
-            for item in rows
-        ], ensure_ascii=False) if rows else None
+        case.billing_terms = new_billing_terms
         case.invoice_on_delivery = form.invoice_on_delivery.data == 'oui'
         case.invoice_on_order = form.invoice_on_order.data == 'oui'
         db.session.commit()
@@ -1679,6 +1755,29 @@ def case_detail(case_id):
         reception=reception,
         doc_types=DOCUMENT_TYPES,
         case_rows=case_rows,
+    )
+
+
+@app.route('/cases/<int:case_id>/changelog')
+@login_required
+def case_changelog(case_id):
+    case = Case.query.get_or_404(case_id)
+    
+    # Check if current user is allowed to view this case
+    is_engineer = current_user.role == 'engineer' and current_user.id == case.engineer_id
+    is_buyer = current_user.role == 'buyer' and case.buyer_email and current_user.email.lower() == case.buyer_email.lower()
+    
+    if not (is_engineer or is_buyer):
+        flash('Vous n\'avez pas accès à l\'historique de cette affaire.', 'warning')
+        return redirect(url_for('case_detail', case_id=case.id))
+    
+    # Get the changelog for this case
+    changes = CaseChangeLog.query.filter_by(case_id=case_id).order_by(CaseChangeLog.changed_at.desc()).all()
+    
+    return render_template(
+        'case_changelog.html',
+        case=case,
+        changes=changes
     )
 
 

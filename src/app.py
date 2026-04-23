@@ -1789,9 +1789,15 @@ def upload_document(case_id, doc_type):
         return redirect(url_for('case_detail', case_id=case_id))
 
     case = Case.query.get_or_404(case_id)
-    if not current_user.can_upload(case):
+    # Permissions: allow engineer and buyer to upload a 'quote' even when no supplier is identified.
+    if doc_type == 'quote' and current_user.role in ('engineer', 'buyer'):
+        allowed = True
+    else:
+        allowed = current_user.can_upload(case)
+
+    if not allowed:
         flash('Vous ne pouvez pas téléverser ce document.', 'warning')
-        return redirect(url_for('case_detail', case_id=case_id))
+        return redirect(url_for('case_detail', case_id=case.id))
 
     if request.method == 'POST':
         file = request.files.get('file')

@@ -115,7 +115,7 @@
 
 <h2>Actions</h2>
 <ul>
-    {% if current_user.role == 'supplier' and not quote %}
+    {% if current_user.role in ('supplier', 'engineer', 'buyer') and not quote %}
         <li><a class="button" href="{{ url_for('upload_document', case_id=case.id, doc_type='quote') }}">Déposer un devis PDF</a></li>
     {% endif %}
     {% if current_user.role == 'buyer' and case.has_signed_quote() and not purchase_order %}

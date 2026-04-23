@@ -16,6 +16,9 @@
                 {% if current_user.role == 'engineer' %}
                     <a href="{{ url_for('signature_settings') }}">Signature</a>
                 {% endif %}
+                {% if current_user.is_authenticated and current_user.is_admin() %}
+                    <a href="{{ url_for('admin_dashboard') }}" style="color: #ff6b6b; font-weight: bold;">Admin</a>
+                {% endif %}
                 <a href="{{ url_for('gdpr_consents') }}" title="Gérer vos consentements RGPD">RGPD</a>
                 <a href="{{ url_for('logout') }}">Déconnexion</a>
             {% else %}

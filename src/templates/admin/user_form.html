@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>{% if user %}Modifier{% else %}Créer{% endif %} un Utilisateur</h1>
+
+<form method="post" style="max-width: 500px;">
+    <div class="form-field">
+        <label for="username">Nom d'utilisateur*</label>
+        <input type="text" id="username" name="username" value="{{ user.username if user else '' }}" required>
+    </div>
+    
+    <div class="form-field">
+        <label for="email">Email*</label>
+        <input type="email" id="email" name="email" value="{{ user.email if user else '' }}" required>
+    </div>
+    
+    <div class="form-field">
+        <label for="password">Mot de passe{% if not user %}*{% endif %}</label>
+        <input type="password" id="password" name="password" {% if not user %}required{% endif %} placeholder="{% if user %}Laisser vide pour garder le mot de passe actuel{% endif %}">
+    </div>
+    
+    <div class="form-field">
+        <label for="role">Rôle*</label>
+        <select id="role" name="role" required>
+            <option value="">-- Sélectionnez un rôle --</option>
+            <option value="engineer" {% if user and user.role == 'engineer' %}selected{% endif %}>Ingénieur</option>
+            <option value="buyer" {% if user and user.role == 'buyer' %}selected{% endif %}>Acheteur</option>
+            <option value="supplier" {% if user and user.role == 'supplier' %}selected{% endif %}>Fournisseur</option>
+            <option value="admin" {% if user and user.role == 'admin' %}selected{% endif %}>Admin</option>
+        </select>
+    </div>
+    
+    <div class="form-actions">
+        <button class="button" type="submit">{% if user %}Modifier{% else %}Créer{% endif %}</button>
+        <a class="button secondary" href="{{ url_for('admin_users') }}">Annuler</a>
+    </div>
+</form>
+{% endblock %}

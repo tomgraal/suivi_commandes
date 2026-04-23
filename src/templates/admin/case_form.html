@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>{% if case %}Modifier{% else %}Créer{% endif %} une Affaire</h1>
+
+<form method="post" style="max-width: 600px;">
+    <div class="form-field">
+        <label for="title">Titre*</label>
+        <input type="text" id="title" name="title" value="{{ case.title if case else '' }}" required>
+    </div>
+    
+    <div class="form-field">
+        <label for="type">Type*</label>
+        <input type="text" id="type" name="type" value="{{ case.type if case else '' }}" required>
+    </div>
+    
+    <div class="form-field">
+        <label for="engineer_id">Ingénieur responsable*</label>
+        <select id="engineer_id" name="engineer_id" required>
+            <option value="">-- Sélectionnez un ingénieur --</option>
+            {% for engineer in engineers %}
+            <option value="{{ engineer.id }}" {% if case and case.engineer_id == engineer.id %}selected{% endif %}>
+                {{ engineer.username }} ({{ engineer.email }})
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    
+    <div class="form-field">
+        <label for="supplier_email">Email du fournisseur</label>
+        <input type="email" id="supplier_email" name="supplier_email" value="{{ case.supplier_email if case else '' }}">
+    </div>
+    
+    <div class="form-field">
+        <label for="description">Description</label>
+        <textarea id="description" name="description" rows="5">{{ case.description if case else '' }}</textarea>
+    </div>
+    
+    <div class="form-actions">
+        <button class="button" type="submit">{% if case %}Modifier{% else %}Créer{% endif %}</button>
+        <a class="button secondary" href="{{ url_for('admin_cases') }}">Annuler</a>
+    </div>
+</form>
+{% endblock %}

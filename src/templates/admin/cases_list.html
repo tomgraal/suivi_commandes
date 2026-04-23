@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Gestion des Affaires</h1>
+
+<a class="button" href="{{ url_for('admin_case_new') }}">➕ Nouvelle affaire</a>
+<a class="button secondary" href="{{ url_for('admin_dashboard') }}">Retour</a>
+
+<table style="width: 100%; margin-top: 20px; border-collapse: collapse;">
+    <thead>
+        <tr style="background-color: #f0f0f0;">
+            <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Titre</th>
+            <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Type</th>
+            <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Ingénieur</th>
+            <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Fournisseur</th>
+            <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Statut</th>
+            <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for case in cases %}
+        <tr style="border: 1px solid #ddd;">
+            <td style="padding: 10px; border: 1px solid #ddd;">{{ case.title }}</td>
+            <td style="padding: 10px; border: 1px solid #ddd;">{{ case.type }}</td>
+            <td style="padding: 10px; border: 1px solid #ddd;">{{ case.engineer.username }}</td>
+            <td style="padding: 10px; border: 1px solid #ddd;">{{ case.supplier_email }}</td>
+            <td style="padding: 10px; border: 1px solid #ddd;">
+                <span style="
+                    display: inline-block;
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    font-size: 12px;
+                    {% if case.status == 'En attente' %}
+                        background-color: #ffa94d;
+                        color: white;
+                    {% elif case.status == 'En cours' %}
+                        background-color: #4c6ef5;
+                        color: white;
+                    {% elif case.status == 'Terminé' %}
+                        background-color: #51cf66;
+                        color: white;
+                    {% endif %}
+                ">
+                    {{ case.status }}
+                </span>
+            </td>
+            <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">
+                <a class="button" href="{{ url_for('admin_case_edit', case_id=case.id) }}" style="padding: 6px 12px; font-size: 12px;">Modifier</a>
+                <form method="POST" action="{{ url_for('admin_case_delete', case_id=case.id) }}" style="display: inline;">
+                    <button class="button" style="padding: 6px 12px; font-size: 12px; background-color: #ff6b6b;" onclick="return confirm('Confirmer la suppression ?')">Supprimer</button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="6" style="padding: 20px; text-align: center; border: 1px solid #ddd;">Aucune affaire trouvée.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

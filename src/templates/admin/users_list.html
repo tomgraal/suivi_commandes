@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Gestion des Utilisateurs</h1>
+
+<a class="button" href="{{ url_for('admin_user_new') }}">➕ Nouveau utilisateur</a>
+<a class="button secondary" href="{{ url_for('admin_dashboard') }}">Retour</a>
+
+<table style="width: 100%; margin-top: 20px; border-collapse: collapse;">
+    <thead>
+        <tr style="background-color: #f0f0f0;">
+            <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Nom d'utilisateur</th>
+            <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Email</th>
+            <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Rôle</th>
+            <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Créé le</th>
+            <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for user in users %}
+        <tr style="border: 1px solid #ddd;">
+            <td style="padding: 10px; border: 1px solid #ddd;">{{ user.username }}</td>
+            <td style="padding: 10px; border: 1px solid #ddd;">{{ user.email }}</td>
+            <td style="padding: 10px; border: 1px solid #ddd;">
+                <span style="
+                    display: inline-block;
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    font-size: 12px;
+                    {% if user.role == 'admin' %}
+                        background-color: #ff6b6b;
+                        color: white;
+                    {% elif user.role == 'engineer' %}
+                        background-color: #4c6ef5;
+                        color: white;
+                    {% elif user.role == 'buyer' %}
+                        background-color: #15aabf;
+                        color: white;
+                    {% elif user.role == 'supplier' %}
+                        background-color: #9c36b5;
+                        color: white;
+                    {% endif %}
+                ">
+                    {{ user.role }}
+                </span>
+            </td>
+            <td style="padding: 10px; border: 1px solid #ddd;">{{ user.created_at.strftime('%d/%m/%Y') }}</td>
+            <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">
+                <a class="button" href="{{ url_for('admin_user_edit', user_id=user.id) }}" style="padding: 6px 12px; font-size: 12px;">Modifier</a>
+                {% if user.id != current_user.id %}
+                <form method="POST" action="{{ url_for('admin_user_delete', user_id=user.id) }}" style="display: inline;">
+                    <button class="button" style="padding: 6px 12px; font-size: 12px; background-color: #ff6b6b;" onclick="return confirm('Confirmer la suppression ?')">Supprimer</button>
+                </form>
+                {% endif %}
+            </td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="5" style="padding: 20px; text-align: center; border: 1px solid #ddd;">Aucun utilisateur trouvé.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

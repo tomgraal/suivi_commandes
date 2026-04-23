@@ -690,6 +690,9 @@ class User(UserMixin, db.Model):
     def can_sign(self, document) -> bool:
         return self.role == 'engineer' and self.id == document.case.engineer_id
 
+    def is_admin(self) -> bool:
+        return self.role == 'admin'
+
 
 class Case(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -2158,6 +2161,207 @@ def gdpr_delete_cancel():
         flash('Votre demande de suppression a été annulée.', 'success')
     
     return redirect(url_for('dashboard'))
+
+
+# Admin Routes
+def admin_required(f):
+    """Decorator to check if user is admin"""
+    from functools import wraps
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated or not current_user.is_admin():
+            flash('Accès refusé. Seuls les admins peuvent accéder.', 'danger')
+            return redirect(url_for('dashboard'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+@app.route('/admin')
+@login_required
+@admin_required
+def admin_dashboard():
+    """Admin dashboard"""
+    users_count = User.query.count()
+    cases_count = Case.query.count()
+    return render_template('admin/dashboard.html', users_count=users_count, cases_count=cases_count)
+
+
+@app.route('/admin/users')
+@login_required
+@admin_required
+def admin_users():
+    """List all users"""
+    users = User.query.all()
+    return render_template('admin/users_list.html', users=users)
+
+
+@app.route('/admin/users/new', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_user_new():
+    """Create a new user"""
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        email = request.form.get('email', '').strip()
+        password = request.form.get('password', '').strip()
+        role = request.form.get('role', 'engineer')
+        
+        if not username or not email or not password:
+            flash('Tous les champs sont requis.', 'warning')
+            return render_template('admin/user_form.html')
+        
+        if User.query.filter_by(username=username).first():
+            flash('Ce nom d\'utilisateur existe déjà.', 'danger')
+            return render_template('admin/user_form.html')
+        
+        if User.query.filter_by(email=email).first():
+            flash('Cet email existe déjà.', 'danger')
+            return render_template('admin/user_form.html')
+        
+        user = User(username=username, email=email, role=role, verified=True)
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+        
+        log_audit('admin_create_user', f'user_{user.id}', f'Admin créé user {username}')
+        flash(f'User {username} créé avec succès.', 'success')
+        return redirect(url_for('admin_users'))
+    
+    return render_template('admin/user_form.html')
+
+
+@app.route('/admin/users/<int:user_id>/edit', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_user_edit(user_id):
+    """Edit a user"""
+    user = User.query.get_or_404(user_id)
+    
+    if request.method == 'POST':
+        user.username = request.form.get('username', '').strip()
+        user.email = request.form.get('email', '').strip()
+        user.role = request.form.get('role', user.role)
+        
+        password = request.form.get('password', '').strip()
+        if password:
+            user.set_password(password)
+        
+        try:
+            db.session.commit()
+            log_audit('admin_edit_user', f'user_{user.id}', f'Admin modifié user {user.username}')
+            flash(f'User {user.username} modifié avec succès.', 'success')
+            return redirect(url_for('admin_users'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Erreur : {str(e)}', 'danger')
+    
+    return render_template('admin/user_form.html', user=user)
+
+
+@app.route('/admin/users/<int:user_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def admin_user_delete(user_id):
+    """Delete a user"""
+    if current_user.id == user_id:
+        flash('Vous ne pouvez pas supprimer votre propre compte.', 'warning')
+        return redirect(url_for('admin_users'))
+    
+    user = User.query.get_or_404(user_id)
+    username = user.username
+    
+    db.session.delete(user)
+    db.session.commit()
+    
+    log_audit('admin_delete_user', f'user_{user_id}', f'Admin supprimé user {username}')
+    flash(f'User {username} supprimé.', 'success')
+    return redirect(url_for('admin_users'))
+
+
+@app.route('/admin/cases')
+@login_required
+@admin_required
+def admin_cases():
+    """List all cases"""
+    cases = Case.query.all()
+    return render_template('admin/cases_list.html', cases=cases)
+
+
+@app.route('/admin/cases/new', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_case_new():
+    """Create a new case"""
+    engineers = User.query.filter_by(role='engineer').all()
+    
+    if request.method == 'POST':
+        title = request.form.get('title', '').strip()
+        case_type = request.form.get('type', '').strip()
+        engineer_id = request.form.get('engineer_id', type=int)
+        supplier_email = request.form.get('supplier_email', '').strip()
+        
+        if not title or not case_type or not engineer_id:
+            flash('Titre, type et ingénieur sont requis.', 'warning')
+            return render_template('admin/case_form.html', engineers=engineers)
+        
+        case = Case(
+            title=title,
+            type=case_type,
+            engineer_id=engineer_id,
+            supplier_email=supplier_email or '',
+            description=request.form.get('description', '').strip()
+        )
+        db.session.add(case)
+        db.session.commit()
+        
+        log_audit('admin_create_case', f'case_{case.id}', f'Admin créé case {title}')
+        flash(f'Affaire {title} créée avec succès.', 'success')
+        return redirect(url_for('admin_cases'))
+    
+    return render_template('admin/case_form.html', engineers=engineers)
+
+
+@app.route('/admin/cases/<int:case_id>/edit', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_case_edit(case_id):
+    """Edit a case"""
+    case = Case.query.get_or_404(case_id)
+    engineers = User.query.filter_by(role='engineer').all()
+    
+    if request.method == 'POST':
+        case.title = request.form.get('title', '').strip()
+        case.type = request.form.get('type', '').strip()
+        case.engineer_id = request.form.get('engineer_id', type=int)
+        case.supplier_email = request.form.get('supplier_email', '').strip() or ''
+        case.description = request.form.get('description', '').strip()
+        
+        try:
+            db.session.commit()
+            log_audit('admin_edit_case', f'case_{case.id}', f'Admin modifié case {case.title}')
+            flash(f'Affaire {case.title} modifiée avec succès.', 'success')
+            return redirect(url_for('admin_cases'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Erreur : {str(e)}', 'danger')
+    
+    return render_template('admin/case_form.html', case=case, engineers=engineers)
+
+
+@app.route('/admin/cases/<int:case_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def admin_case_delete(case_id):
+    """Delete a case"""
+    case = Case.query.get_or_404(case_id)
+    title = case.title
+    
+    db.session.delete(case)
+    db.session.commit()
+    
+    log_audit('admin_delete_case', f'case_{case_id}', f'Admin supprimé case {title}')
+    flash(f'Affaire {title} supprimée.', 'success')
+    return redirect(url_for('admin_cases'))
 
 
 if __name__ == '__main__':

@@ -89,22 +89,23 @@
         <li>
             <strong>{{ label }} :</strong>
             {% if document %}
-                <a class="button small primary" href="{{ url_for('view_document', document_id=document.id) }}" target="_blank" rel="noopener">Voir</a>
-                |
-                <a class="button small primary" href="{{ url_for('document_file', filename=document.filename) }}">Télécharger</a>
-                {% if document.is_signed %}
-                    <span class="badge signed">Signé</span>
-                {% else %}
-                    <span class="badge pending">En attente de signature</span>
-                {% endif %}
-                {% if current_user.is_authenticated and current_user.role == 'engineer' and current_user.id == case.engineer_id and not document.is_signed %}
-                    <a class="button small primary" href="{{ url_for('sign_document', document_id=document.id) }}">Signer</a>
-                {% endif %}
-                {% if (document.is_signed and ((current_user.role == 'engineer' and current_user.id == case.engineer_id and document.type in ['quote', 'purchase_order']) or (current_user.role == 'buyer' and document.type in ['purchase_order', 'reception']))) or (not document.is_signed and (current_user.role == 'engineer' or current_user.id == document.uploaded_by_id)) %}
-                    <form method="post" action="{{ url_for('delete_document', document_id=document.id) }}" style="display:inline;">
-                        <button type="submit" class="button small danger" onclick="return confirm('Supprimer ce document ? Cela ne peut pas être annulé.')">Supprimer</button>
-                    </form>
-                {% endif %}
+                <div class="document-actions">
+                    <a class="button small primary" href="{{ url_for('view_document', document_id=document.id) }}" target="_blank" rel="noopener">Voir</a>
+                    <a class="button small primary" href="{{ url_for('document_file', filename=document.filename) }}">Télécharger</a>
+                    {% if document.is_signed %}
+                        <span class="badge signed">Signé</span>
+                    {% else %}
+                        <span class="badge pending">En attente de signature</span>
+                        {% if current_user.is_authenticated and current_user.role == 'engineer' and current_user.id == case.engineer_id %}
+                            <a class="button small primary" href="{{ url_for('sign_document', document_id=document.id) }}">Signer</a>
+                        {% endif %}
+                    {% endif %}
+                    {% if (document.is_signed and ((current_user.role == 'engineer' and current_user.id == case.engineer_id and document.type in ['quote', 'purchase_order']) or (current_user.role == 'buyer' and document.type in ['purchase_order', 'reception']))) or (not document.is_signed and (current_user.role == 'engineer' or current_user.id == document.uploaded_by_id)) %}
+                        <form method="post" action="{{ url_for('delete_document', document_id=document.id) }}" style="display:inline;">
+                            <button type="submit" class="button small danger" onclick="return confirm('Supprimer ce document ? Cela ne peut pas être annulé.')">Supprimer</button>
+                        </form>
+                    {% endif %}
+                </div>
             {% else %}
                 Aucun document.
             {% endif %}
@@ -126,4 +127,71 @@
     {% if (current_user.role == 'engineer' and current_user.id == case.engineer_id) or (current_user.role == 'buyer' and case.buyer_email and current_user.email.lower() == case.buyer_email.lower()) %}
         <li><a class="button" href="{{ url_for('edit_case', case_id=case.id) }}">Modifier l’affaire</a></li>        <li><a class="button secondary" href="{{ url_for('case_changelog', case_id=case.id) }}">Voir l'historique des modifications</a></li>    {% endif %}
 </ul>
-{% endblock %}
+<style>
+    /* Uniformiser les boutons */
+    .document-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        margin-top: 8px;
+    }
+
+    .document-actions .button,
+    .document-actions .badge {
+        display: inline-block;
+        padding: 6px 12px;
+        white-space: nowrap;
+        font-size: 13px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        text-decoration: none;
+        cursor: pointer;
+        background-color: #f0f0f0;
+        color: #333;
+        transition: all 0.2s ease;
+    }
+
+    .document-actions .button:hover {
+        background-color: #e0e0e0;
+    }
+
+    .document-actions .button.primary {
+        background-color: #007bff;
+        color: white;
+        border-color: #0056b3;
+    }
+
+    .document-actions .button.primary:hover {
+        background-color: #0056b3;
+    }
+
+    .document-actions .button.danger {
+        background-color: #dc3545;
+        color: white;
+        border-color: #c82333;
+    }
+
+    .document-actions .button.danger:hover {
+        background-color: #c82333;
+    }
+
+    .document-actions .badge {
+        background-color: #e7e7e7;
+        border-color: #999;
+        padding: 6px 10px;
+        font-weight: 600;
+    }
+
+    .document-actions .badge.signed {
+        background-color: #d4edda;
+        color: #155724;
+        border-color: #c3e6cb;
+    }
+
+    .document-actions .badge.pending {
+        background-color: #fff3cd;
+        color: #856404;
+        border-color: #ffeeba;
+    }
+</style>{% endblock %}

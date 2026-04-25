@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>UF (Unités Fonctionnelles)</h2>
+<p><a href="{{ url_for('admin_uf_new') }}" class="btn btn-primary">Nouvelle UF</a></p>
+<table class="table">
+  <thead>
+    <tr><th>Code</th><th>Libellé</th><th>Actions</th></tr>
+  </thead>
+  <tbody>
+    {% for u in ufs %}
+    <tr>
+      <td>{{ u.code }}</td>
+      <td>{{ u.label }}</td>
+      <td>
+        <a href="{{ url_for('admin_uf_edit', uf_id=u.id) }}" class="btn btn-sm btn-secondary">Éditer</a>
+        <form action="{{ url_for('admin_uf_delete', uf_id=u.id) }}" method="post" style="display:inline-block;">
+          <button class="btn btn-sm btn-danger" onclick="return confirm('Supprimer ?')">Supprimer</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="3">Aucun enregistrement</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

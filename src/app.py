@@ -28,6 +28,13 @@ from werkzeug.utils import secure_filename
 from wtforms import BooleanField, DateField, PasswordField, SelectField, StringField, TextAreaField, SubmitField
 from wtforms.validators import DataRequired, Email, EqualTo, Length
 import io
+from io import BytesIO
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+from reportlab.lib import colors
+from flask import make_response
 import base64
 import pyotp
 import qrcode
@@ -868,6 +875,30 @@ class CaseChangeLog(db.Model):
     user = db.relationship('User', backref='case_change_logs')
 
 
+class UF(db.Model):
+    __tablename__ = 'uf'
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(120), unique=True, nullable=False)
+    label = db.Column(db.String(250), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class AccountNumber(db.Model):
+    __tablename__ = 'account_number'
+    id = db.Column(db.Integer, primary_key=True)
+    number = db.Column(db.String(120), unique=True, nullable=False)
+    description = db.Column(db.String(250), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class ProjectCode(db.Model):
+    __tablename__ = 'project_code'
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(120), unique=True, nullable=False)
+    label = db.Column(db.String(250), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 class LoginForm(FlaskForm):
     username = StringField('Nom d’utilisateur', validators=[DataRequired(), Length(min=3, max=80)])
     password = PasswordField('Mot de passe', validators=[DataRequired()])
@@ -1588,6 +1619,10 @@ def verify_email(token):
 @user_required('engineer')
 def create_case():
     form = CaseForm()
+    # populate lookup choices from DB
+    form.account_number.choices = [(a.number, f"{a.number} - {a.description or ''}") for a in AccountNumber.query.order_by(AccountNumber.number).all()]
+    form.project_code.choices = [(p.code, f"{p.code} - {p.label or ''}") for p in ProjectCode.query.order_by(ProjectCode.code).all()]
+    form.uf_number.choices = [(u.code, f"{u.code} - {u.label}") for u in UF.query.order_by(UF.code).all()]
     if form.validate_on_submit():
         rows = [item for item in collect_case_rows() if item['account_number'] or item['billing_terms']]
         case = Case(
@@ -1636,7 +1671,7 @@ def create_case():
         flash('Affaire créée. Le fournisseur et l’acheteur ont été notifiés.', 'success')
         return redirect(url_for('dashboard'))
 
-    return render_template('case_form.html', form=form, extra_rows=[], account_choices=ACCOUNT_NUMBER_CHOICES)
+    return render_template('case_form.html', form=form, extra_rows=[], account_choices=[(a.number, a.description) for a in AccountNumber.query.order_by(AccountNumber.number).all()])
 
 
 @app.route('/cases/<int:case_id>/edit', methods=['GET', 'POST'])
@@ -1650,6 +1685,10 @@ def edit_case(case_id):
         return redirect(url_for('case_detail', case_id=case.id))
 
     form = CaseForm(obj=case)
+    # populate lookup choices from DB
+    form.account_number.choices = [(a.number, f"{a.number} - {a.description or ''}") for a in AccountNumber.query.order_by(AccountNumber.number).all()]
+    form.project_code.choices = [(p.code, f"{p.code} - {p.label or ''}") for p in ProjectCode.query.order_by(ProjectCode.code).all()]
+    form.uf_number.choices = [(u.code, f"{u.code} - {u.label}") for u in UF.query.order_by(UF.code).all()]
     buyer_edit = is_buyer
     if buyer_edit:
         form.title.render_kw = {'readonly': True, 'disabled': True}
@@ -1961,6 +2000,182 @@ def delete_document(document_id):
     db.session.commit()
     flash('Document supprimé.', 'success')
     return redirect(url_for('case_detail', case_id=case.id))
+
+
+@app.route('/cases/<int:case_id>/export-pdf')
+@login_required
+def export_case_pdf(case_id):
+    """Export case details as PDF"""
+    case = Case.query.get_or_404(case_id)
+    
+    # Check permissions
+    is_engineer = current_user.role == 'engineer' and current_user.id == case.engineer_id
+    is_buyer = current_user.role == 'buyer' and case.buyer_email and current_user.email.lower() == case.buyer_email.lower()
+    is_supplier = current_user.role == 'supplier' and current_user.email.lower() == case.supplier_email.lower()
+    
+    if not (is_engineer or is_buyer or is_supplier):
+        flash('Vous n\'avez pas accès à cette affaire.', 'warning')
+        return redirect(url_for('dashboard'))
+    
+    # Create PDF in memory
+    pdf_buffer = BytesIO()
+    doc = SimpleDocTemplate(pdf_buffer, pagesize=A4, topMargin=0.5*inch, bottomMargin=0.5*inch)
+    
+    # Styles
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=18,
+        textColor=colors.HexColor('#003366'),
+        spaceAfter=12,
+        fontName='Helvetica-Bold'
+    )
+    
+    heading_style = ParagraphStyle(
+        'CustomHeading',
+        parent=styles['Heading2'],
+        fontSize=12,
+        textColor=colors.HexColor('#003366'),
+        spaceAfter=8,
+        spaceBefore=8,
+        fontName='Helvetica-Bold'
+    )
+    
+    normal_style = ParagraphStyle(
+        'CustomNormal',
+        parent=styles['Normal'],
+        fontSize=9,
+        spaceAfter=4
+    )
+    
+    # Build content
+    elements = []
+    
+    # Title
+    elements.append(Paragraph(f"Affaire : {case.title}", title_style))
+    elements.append(Spacer(1, 0.2*inch))
+    
+    # Case info section
+    elements.append(Paragraph("Informations principales", heading_style))
+    
+    case_info_data = [
+        ['Champ', 'Valeur'],
+        ['Type', case.type or 'N/A'],
+        ['Fournisseur', case.supplier_email or 'N/A'],
+        ['Acheteur', case.buyer_email or 'N/A'],
+        ['Ingénieur', case.engineer.email if case.engineer else 'N/A'],
+        ['Description', case.description or 'N/A'],
+        ['Objet du contrat', case.object_contract or 'N/A'],
+        ['Date d\'effet', str(case.start_date) if case.start_date else 'N/A'],
+        ['Durée', case.duration or 'N/A'],
+        ['Marché', case.market or 'N/A'],
+        ['Code projet', case.project_code or 'N/A'],
+        ['N° UF', case.uf_number or 'N/A'],
+        ['Désignation commande', case.provider_designation or 'N/A'],
+        ['Facturation à réception PV', 'Oui' if case.invoice_on_delivery else 'Non'],
+        ['Facturation à réception commande', 'Oui' if case.invoice_on_order else 'Non'],
+    ]
+    
+    case_table = Table(case_info_data, colWidths=[2*inch, 4*inch])
+    case_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#E8F0F7')),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F5F5F5')]),
+    ]))
+    elements.append(case_table)
+    elements.append(Spacer(1, 0.2*inch))
+    
+    # Account and billing info
+    case_rows = combine_case_rows(case.get_account_rows(), case.get_billing_rows())
+    if case_rows:
+        elements.append(Paragraph("Comptes et facturation", heading_style))
+        
+        billing_data = [
+            ['N° Compte', 'Description', 'Modalité', 'Description modalité'],
+        ]
+        for row in case_rows:
+            billing_data.append([
+                row.get('account_number') or 'N/A',
+                row.get('account_description') or 'N/A',
+                row.get('billing_terms') or 'N/A',
+                row.get('billing_description') or 'N/A',
+            ])
+        
+        billing_table = Table(billing_data, colWidths=[1.2*inch, 1.2*inch, 1.2*inch, 1.4*inch])
+        billing_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#003366')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F5F5F5')]),
+        ]))
+        elements.append(billing_table)
+        elements.append(Spacer(1, 0.2*inch))
+    
+    # Documents section
+    elements.append(Paragraph("Documents associés", heading_style))
+    
+    docs_data = [['Type', 'Signé', 'Uploadé par']]
+    for doc_key, label in DOCUMENT_TYPES.items():
+        doc = case.get_document(doc_key)
+        if doc:
+            docs_data.append([
+                label,
+                'Oui' if doc.is_signed else 'Non',
+                doc.uploaded_by.username if doc.uploaded_by else 'N/A',
+            ])
+    
+    if len(docs_data) > 1:
+        docs_table = Table(docs_data, colWidths=[2*inch, 1.5*inch, 2.5*inch])
+        docs_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#003366')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F5F5F5')]),
+        ]))
+        elements.append(docs_table)
+    else:
+        elements.append(Paragraph("Aucun document", normal_style))
+    
+    elements.append(Spacer(1, 0.2*inch))
+    
+    # Footer with generation date
+    elements.append(Paragraph(
+        f"Document généré le {datetime.now().strftime('%d/%m/%Y à %H:%M:%S')}",
+        ParagraphStyle('Footer', parent=styles['Normal'], fontSize=8, textColor=colors.grey, alignment=1)
+    ))
+    
+    # Build PDF
+    doc.build(elements)
+    
+    # Return PDF as response
+    pdf_buffer.seek(0)
+    response = make_response(pdf_buffer.getvalue())
+    response.headers['Content-Disposition'] = f'attachment; filename="affaire_{case.id}_{case.title.replace(" ", "_")}.pdf"'
+    response.headers['Content-Type'] = 'application/pdf'
+    
+    log_audit('export_case_pdf', f'case_{case.id}', f'Exported case {case.title} as PDF')
+    
+    return response
 
 
 # GDPR/RGPD Routes
@@ -2362,6 +2577,189 @@ def admin_case_delete(case_id):
     log_audit('admin_delete_case', f'case_{case_id}', f'Admin supprimé case {title}')
     flash(f'Affaire {title} supprimée.', 'success')
     return redirect(url_for('admin_cases'))
+
+
+@app.route('/admin/ufs')
+@login_required
+@admin_required
+def admin_ufs():
+    ufs = UF.query.order_by(UF.code).all()
+    return render_template('admin/ufs_list.html', ufs=ufs)
+
+
+@app.route('/admin/ufs/new', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_uf_new():
+    if request.method == 'POST':
+        code = request.form.get('code', '').strip()
+        label = request.form.get('label', '').strip()
+        if not code or not label:
+            flash('Code et libellé requis.', 'warning')
+            return render_template('admin/uf_form.html')
+        if UF.query.filter_by(code=code).first():
+            flash('Ce code existe déjà.', 'danger')
+            return render_template('admin/uf_form.html')
+        u = UF(code=code, label=label)
+        db.session.add(u)
+        db.session.commit()
+        log_audit('admin_create_uf', f'uf_{u.id}', f'Admin créé UF {code}')
+        flash('UF créée.', 'success')
+        return redirect(url_for('admin_ufs'))
+    return render_template('admin/uf_form.html')
+
+
+@app.route('/admin/ufs/<int:uf_id>/edit', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_uf_edit(uf_id):
+    u = UF.query.get_or_404(uf_id)
+    if request.method == 'POST':
+        u.code = request.form.get('code', u.code).strip()
+        u.label = request.form.get('label', u.label).strip()
+        try:
+            db.session.commit()
+            log_audit('admin_edit_uf', f'uf_{u.id}', f'Admin modifié UF {u.code}')
+            flash('UF modifiée.', 'success')
+            return redirect(url_for('admin_ufs'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Erreur : {str(e)}', 'danger')
+    return render_template('admin/uf_form.html', uf=u)
+
+
+@app.route('/admin/ufs/<int:uf_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def admin_uf_delete(uf_id):
+    u = UF.query.get_or_404(uf_id)
+    db.session.delete(u)
+    db.session.commit()
+    log_audit('admin_delete_uf', f'uf_{uf_id}', f'Admin supprimé UF {u.code}')
+    flash('UF supprimée.', 'success')
+    return redirect(url_for('admin_ufs'))
+
+
+@app.route('/admin/accounts')
+@login_required
+@admin_required
+def admin_accounts():
+    accounts = AccountNumber.query.order_by(AccountNumber.number).all()
+    return render_template('admin/accounts_list.html', accounts=accounts)
+
+
+@app.route('/admin/accounts/new', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_account_new():
+    if request.method == 'POST':
+        number = request.form.get('number', '').strip()
+        description = request.form.get('description', '').strip()
+        if not number:
+            flash('Numéro requis.', 'warning')
+            return render_template('admin/account_form.html')
+        if AccountNumber.query.filter_by(number=number).first():
+            flash('Ce numéro existe déjà.', 'danger')
+            return render_template('admin/account_form.html')
+        a = AccountNumber(number=number, description=description)
+        db.session.add(a)
+        db.session.commit()
+        log_audit('admin_create_account', f'account_{a.id}', f'Admin créé compte {number}')
+        flash('Compte créé.', 'success')
+        return redirect(url_for('admin_accounts'))
+    return render_template('admin/account_form.html')
+
+
+@app.route('/admin/accounts/<int:account_id>/edit', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_account_edit(account_id):
+    a = AccountNumber.query.get_or_404(account_id)
+    if request.method == 'POST':
+        a.number = request.form.get('number', a.number).strip()
+        a.description = request.form.get('description', a.description).strip()
+        try:
+            db.session.commit()
+            log_audit('admin_edit_account', f'account_{a.id}', f'Admin modifié compte {a.number}')
+            flash('Compte modifié.', 'success')
+            return redirect(url_for('admin_accounts'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Erreur : {str(e)}', 'danger')
+    return render_template('admin/account_form.html', account=a)
+
+
+@app.route('/admin/accounts/<int:account_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def admin_account_delete(account_id):
+    a = AccountNumber.query.get_or_404(account_id)
+    db.session.delete(a)
+    db.session.commit()
+    log_audit('admin_delete_account', f'account_{account_id}', f'Admin supprimé compte {a.number}')
+    flash('Compte supprimé.', 'success')
+    return redirect(url_for('admin_accounts'))
+
+
+@app.route('/admin/project_codes')
+@login_required
+@admin_required
+def admin_project_codes():
+    codes = ProjectCode.query.order_by(ProjectCode.code).all()
+    return render_template('admin/project_codes_list.html', codes=codes)
+
+
+@app.route('/admin/project_codes/new', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_project_code_new():
+    if request.method == 'POST':
+        code = request.form.get('code', '').strip()
+        label = request.form.get('label', '').strip()
+        if not code:
+            flash('Code requis.', 'warning')
+            return render_template('admin/project_code_form.html')
+        if ProjectCode.query.filter_by(code=code).first():
+            flash('Ce code existe déjà.', 'danger')
+            return render_template('admin/project_code_form.html')
+        p = ProjectCode(code=code, label=label)
+        db.session.add(p)
+        db.session.commit()
+        log_audit('admin_create_project_code', f'projectcode_{p.id}', f'Admin créé code projet {code}')
+        flash('Code projet créé.', 'success')
+        return redirect(url_for('admin_project_codes'))
+    return render_template('admin/project_code_form.html')
+
+
+@app.route('/admin/project_codes/<int:code_id>/edit', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_project_code_edit(code_id):
+    p = ProjectCode.query.get_or_404(code_id)
+    if request.method == 'POST':
+        p.code = request.form.get('code', p.code).strip()
+        p.label = request.form.get('label', p.label).strip()
+        try:
+            db.session.commit()
+            log_audit('admin_edit_project_code', f'projectcode_{p.id}', f'Admin modifié code projet {p.code}')
+            flash('Code projet modifié.', 'success')
+            return redirect(url_for('admin_project_codes'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Erreur : {str(e)}', 'danger')
+    return render_template('admin/project_code_form.html', code=p)
+
+
+@app.route('/admin/project_codes/<int:code_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def admin_project_code_delete(code_id):
+    p = ProjectCode.query.get_or_404(code_id)
+    db.session.delete(p)
+    db.session.commit()
+    log_audit('admin_delete_project_code', f'projectcode_{code_id}', f'Admin supprimé code projet {p.code}')
+    flash('Code projet supprimé.', 'success')
+    return redirect(url_for('admin_project_codes'))
 
 
 if __name__ == '__main__':

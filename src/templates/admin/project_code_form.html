@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>{% if code %}Éditer code projet{% else %}Nouveau code projet{% endif %}</h2>
+<form method="post">
+  <div class="form-group">
+    <label>Code</label>
+    <input name="code" class="form-control" value="{{ code.code if code else '' }}" required>
+  </div>
+  <div class="form-group">
+    <label>Libellé</label>
+    <input name="label" class="form-control" value="{{ code.label if code else '' }}">
+  </div>
+  <button class="btn btn-primary">Enregistrer</button>
+  <a href="{{ url_for('admin_project_codes') }}" class="btn btn-secondary">Annuler</a>
+</form>
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>{% if account %}Éditer compte{% else %}Nouveau compte{% endif %}</h2>
+<form method="post">
+  <div class="form-group">
+    <label>Numéro</label>
+    <input name="number" class="form-control" value="{{ account.number if account else '' }}" required>
+  </div>
+  <div class="form-group">
+    <label>Description</label>
+    <input name="description" class="form-control" value="{{ account.description if account else '' }}">
+  </div>
+  <button class="btn btn-primary">Enregistrer</button>
+  <a href="{{ url_for('admin_accounts') }}" class="btn btn-secondary">Annuler</a>
+</form>
+{% endblock %}

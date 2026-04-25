@@ -2012,14 +2012,15 @@ def export_case_pdf(case_id):
     is_engineer = current_user.role == 'engineer' and current_user.id == case.engineer_id
     is_buyer = current_user.role == 'buyer' and case.buyer_email and current_user.email.lower() == case.buyer_email.lower()
     is_supplier = current_user.role == 'supplier' and current_user.email.lower() == case.supplier_email.lower()
+    is_admin = current_user.is_admin()
     
-    if not (is_engineer or is_buyer or is_supplier):
+    if not (is_engineer or is_buyer or is_supplier or is_admin):
         flash('Vous n\'avez pas accès à cette affaire.', 'warning')
         return redirect(url_for('dashboard'))
     
     # Create PDF in memory
     pdf_buffer = BytesIO()
-    doc = SimpleDocTemplate(pdf_buffer, pagesize=A4, topMargin=0.5*inch, bottomMargin=0.5*inch)
+    pdf_doc = SimpleDocTemplate(pdf_buffer, pagesize=A4, topMargin=0.5*inch, bottomMargin=0.5*inch)
     
     # Styles
     styles = getSampleStyleSheet()
@@ -2132,10 +2133,12 @@ def export_case_pdf(case_id):
     for doc_key, label in DOCUMENT_TYPES.items():
         doc = case.get_document(doc_key)
         if doc:
+            uploader = User.query.get(doc.uploaded_by_id) if doc.uploaded_by_id else None
+            uploader_name = uploader.username if uploader else 'N/A'
             docs_data.append([
                 label,
                 'Oui' if doc.is_signed else 'Non',
-                doc.uploaded_by.username if doc.uploaded_by else 'N/A',
+                uploader_name,
             ])
     
     if len(docs_data) > 1:
@@ -2165,7 +2168,7 @@ def export_case_pdf(case_id):
     ))
     
     # Build PDF
-    doc.build(elements)
+    pdf_doc.build(elements)
     
     # Return PDF as response
     pdf_buffer.seek(0)

@@ -180,10 +180,10 @@ Surveillance du système
 ## 📋 Paramètres configurables
 
 ### Comptes budgétaires disponibles
-- **Budget Exploitation** : H606253, H606254, H612221, H613251, H6151610, etc. (48 comptes)
-- **Budget CFPS** : C61351, C61554, C615261, etc. (7 comptes)
-- **Budget GHT** : G6151610, G615254, G6152610, etc. (9 comptes)
-- **Budget Investissement** : H2051205, H2051206, H2052000, H21832106, etc. (15 comptes)
+- **Budget Exploitation** : 
+- **Budget CFPS** : 
+- **Budget GHT** : 
+- **Budget Investissement** : 
 
 ### Codes projets (50+)
 - Projets SI : Cybersécurité, Infrastructure réseau, PARC info, SSO, GMAO, Pharmacie, etc.

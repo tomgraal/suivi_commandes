@@ -40,7 +40,7 @@
                         color: white;
                     {% endif %}
                 ">
-                    {{ user.role }}
+                    {{ get_role_label(user.role) }}
                 </span>
             </td>
             <td style="padding: 10px; border: 1px solid #ddd;">{{ user.created_at.strftime('%d/%m/%Y') }}</td>

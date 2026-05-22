@@ -66,6 +66,22 @@ db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
+ROLE_LABELS = {
+    'engineer': 'Demandeur',
+    'buyer': 'Acheteur Approvisionneur',
+    'supplier': 'Fournisseur',
+    'admin': 'Admin',
+}
+
+
+def get_role_label(role):
+    return ROLE_LABELS.get(role, role.capitalize() if role else '')
+
+
+@app.context_processor
+def utility_processor():
+    return dict(get_role_label=get_role_label)
+
 ALLOWED_EXTENSIONS = {'pdf'}
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 CASE_TYPES = [
@@ -921,9 +937,9 @@ class RegisterForm(FlaskForm):
     role = SelectField(
         'Rôle',
         choices=[
-            ('engineer', 'Ingénieur'),
+            ('engineer', 'Demandeur'),
             ('supplier', 'Fournisseur'),
-            ('buyer', 'Acheteur'),
+            ('buyer', 'Acheteur Approvisionneur'),
         ],
         validators=[DataRequired()],
     )

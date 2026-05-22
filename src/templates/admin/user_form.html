@@ -22,8 +22,8 @@
         <label for="role">Rôle*</label>
         <select id="role" name="role" required>
             <option value="">-- Sélectionnez un rôle --</option>
-            <option value="engineer" {% if user and user.role == 'engineer' %}selected{% endif %}>Ingénieur</option>
-            <option value="buyer" {% if user and user.role == 'buyer' %}selected{% endif %}>Acheteur</option>
+            <option value="engineer" {% if user and user.role == 'engineer' %}selected{% endif %}>Demandeur</option>
+            <option value="buyer" {% if user and user.role == 'buyer' %}selected{% endif %}>Acheteur Approvisionneur</option>
             <option value="supplier" {% if user and user.role == 'supplier' %}selected{% endif %}>Fournisseur</option>
             <option value="admin" {% if user and user.role == 'admin' %}selected{% endif %}>Admin</option>
         </select>

@@ -4,6 +4,8 @@
 
 Une application Web complète et sécurisée pour le suivi des commandes et des affaires au sein du processus interne du GHT Alpes du Sud. Cette plateforme collaborative permet aux ingénieurs, acheteurs et fournisseurs de gérer l'ensemble du cycle de vie des acquisitions : de la création d'une affaire jusqu'à la signature numérique des documents, en passant par le téléversement et la visualisation des devis, bons de commande et bons de réception.
 
+Test de MAJ du repo.
+
 ## ✨ Fonctionnalités principales
 
 ### 🔐 Authentification et sécurité
